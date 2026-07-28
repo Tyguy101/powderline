@@ -4,6 +4,7 @@ tools/reports/*
 !tools/reports/.gitkeep
 playwright-report/
 test-results/
+.wrangler/
 *.local
 *.tsbuildinfo
 .DS_Store
