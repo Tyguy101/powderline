@@ -1,0 +1,36 @@
+{
+  "name": "procedural-ski-playground",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "benchmark": "tsx tools/benchmark/run-benchmark.ts",
+    "benchmark:potato": "tsx tools/benchmark/run-benchmark.ts --quality=potato --viewport=1280x720",
+    "benchmark:mobile": "tsx tools/benchmark/run-benchmark.ts --quality=low --viewport=390x844",
+    "capture": "tsx tools/capture/capture.ts",
+    "report": "tsx tools/benchmark/create-report.ts"
+  },
+  "dependencies": {
+    "three": "0.185.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "@playwright/test": "1.62.0",
+    "@types/node": "26.1.2",
+    "@types/three": "0.185.1",
+    "eslint": "10.8.0",
+    "globals": "17.8.0",
+    "prettier": "3.9.6",
+    "tsx": "4.23.1",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.65.0",
+    "vite": "8.1.5",
+    "vitest": "4.1.10"
+  }
+}
