@@ -54,6 +54,12 @@ export interface CrashVisualState {
   equipmentSpread: number;
   snowBurst: number;
   slideTrail: number;
+  facePlant: number;
+  treeStick: number;
+  sideWipeout: number;
+  tumbleCurl: number;
+  skiLift: number;
+  armSpread: number;
   elapsed: number;
   duration: number;
   contactX: number;
@@ -76,6 +82,12 @@ export function createCrashVisualState(): CrashVisualState {
     equipmentSpread: 0,
     snowBurst: 0,
     slideTrail: 0,
+    facePlant: 0,
+    treeStick: 0,
+    sideWipeout: 0,
+    tumbleCurl: 0,
+    skiLift: 0,
+    armSpread: 0,
     elapsed: 0,
     duration: 0,
     contactX: 0,
@@ -136,6 +148,7 @@ export function selectCrashReaction(context: Readonly<ImpactContext>): CrashReac
     family = 'obstacle-slam';
   } else if (
     context.obstacleType === 'rock' &&
+    centered < 0.72 &&
     (speed > 23 || airborne > 0.15 || variant > 0.56)
   ) {
     family = 'rolling-tumble';

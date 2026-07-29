@@ -26,8 +26,9 @@ async function setRange(page: Page, field: string, value: number): Promise<void>
 
 const scenarios = [
   { name: 'tree-slam', obstacle: 'tree', speed: 27, angle: 0, offset: 0, delay: 220 },
+  { name: 'rock-face-plant', obstacle: 'rock', speed: 28, angle: 0, offset: 0, delay: 720 },
   { name: 'side-spin', obstacle: 'tree', speed: 24, angle: 58, offset: 82, delay: 450 },
-  { name: 'rock-tumble', obstacle: 'rock', speed: 34, angle: -12, offset: -18, delay: 620 },
+  { name: 'rock-tumble', obstacle: 'rock', speed: 34, angle: -12, offset: -42, delay: 620 },
 ] as const;
 
 try {

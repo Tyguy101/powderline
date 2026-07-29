@@ -50,11 +50,24 @@ describe('deterministic crash selection', () => {
   it('uses rocks and speed to produce rolling tumbles and stronger launches', () => {
     const tree = selectCrashReaction(impact({ speed: 31, velocityY: 31 }));
     const rock = selectCrashReaction(
-      impact({ obstacleType: 'rock', obstacleId: 7781, speed: 31, velocityY: 31 }),
+      impact({
+        obstacleType: 'rock',
+        obstacleId: 7781,
+        speed: 31,
+        velocityY: 31,
+        contactOffset: 0.42,
+      }),
     );
     expect(rock.family).toBe('rolling-tumble');
     expect(rock.launch).toBeGreaterThan(tree.launch);
     expect(rock.rolls).toBeGreaterThan(0);
+  });
+
+  it('makes a direct centered rock hit a face-plant', () => {
+    const reaction = selectCrashReaction(
+      impact({ obstacleType: 'rock', obstacleId: 7781, speed: 28, velocityY: 28 }),
+    );
+    expect(reaction.family).toBe('face-plant');
   });
 
   it('changes controlled variation without frame-time randomness', () => {

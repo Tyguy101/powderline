@@ -129,13 +129,30 @@ export class GameRenderer {
       crash.family === 'side-spin' ? 1 : crash.family === 'rolling-tumble' ? 2 : crash.family === 'obstacle-slam' ? 3 : 0;
     this.skier.equipmentSpread.value = crash.equipmentSpread;
     this.skier.snowBurst.value = crash.snowBurst;
+    this.skier.facePlant.value = crash.facePlant;
+    this.skier.treeStick.value = crash.treeStick;
+    this.skier.sideWipeout.value = crash.sideWipeout;
+    this.skier.tumbleCurl.value = crash.tumbleCurl;
+    this.skier.skiLift.value = crash.skiLift;
+    this.skier.armSpread.value = crash.armSpread;
+    this.skier.slideTrail.value = crash.slideTrail;
     const shake =
       this.shakeTime > 0
         ? Math.sin(this.shakeTime * 83) * this.shakeStrength * (this.shakeTime / 0.32)
         : 0;
     this.skierMesh.position.x = state.position.x - this.cameraWorldX + shake;
     this.skierMesh.position.y = this.cameraWorldY - state.position.y + crash.lift * 1.8 - shake * 0.45;
-    this.skierMesh.rotation.z = crash.active ? crash.rotation : state.wobble * 0.12;
+    this.skierMesh.rotation.z = crash.active
+      ? crash.family === 'rolling-tumble'
+        ? crash.rotation
+        : crash.family === 'side-spin'
+          ? crash.rotation * 0.72
+          : crash.family === 'obstacle-slam'
+            ? crash.phase === 'impact'
+              ? 0
+              : crash.rotation * 0.42
+            : crash.rotation * 0.08
+      : state.wobble * 0.12;
     this.skierMesh.scale.set(1 + crash.squash * 0.26, 1 - crash.squash * 0.34, 1);
     if (this.collisionDebugMesh.visible) {
       this.collisionDebug.skierX.value = state.position.x - this.cameraWorldX;

@@ -124,10 +124,12 @@ export class SkiPhysics {
     this.crashSpin =
       reaction.spinDirection *
       (reaction.family === 'rolling-tumble'
-        ? 5.4 + reaction.rolls * 1.8
+        ? 4.4 + reaction.rolls * 1.35
         : reaction.family === 'side-spin'
-          ? 4.2 + reaction.severity * 4
-          : 1.2 + reaction.severity * 2.2);
+          ? 2.8 + reaction.severity * 2.4
+          : reaction.family === 'obstacle-slam'
+            ? 0.7 + reaction.severity
+            : 0.16);
     state.velocityX = this.crashVelocityX;
     state.velocityY = this.crashVelocityY;
     state.carve = 0;
@@ -259,6 +261,49 @@ export class SkiPhysics {
           : 0;
     crash.slideTrail =
       crash.phase === 'follow-through' ? reaction.severity * (1 - crash.progress) : 0;
+    const impactBlend = crash.phase === 'impact' ? crash.progress : 1;
+    const settleBlend =
+      crash.phase === 'rest' ? 1 : crash.phase === 'follow-through' ? crash.progress : 0;
+    crash.facePlant =
+      reaction.family === 'face-plant'
+        ? Math.min(1, impactBlend * 1.4)
+        : reaction.family === 'rolling-tumble'
+          ? Math.max(0, Math.sin(crash.rotation)) * 0.38
+          : 0;
+    crash.treeStick =
+      reaction.family === 'obstacle-slam'
+        ? crash.phase === 'impact'
+          ? Math.sin(crash.progress * Math.PI * 0.72)
+          : crash.phase === 'launch'
+            ? 1 - crash.progress * 0.7
+            : 0
+        : 0;
+    crash.sideWipeout =
+      reaction.family === 'side-spin'
+        ? Math.min(1, impactBlend) * (1 - settleBlend * 0.25)
+        : reaction.family === 'obstacle-slam' && crash.phase !== 'impact'
+          ? Math.min(1, crash.progress * 1.5)
+          : 0;
+    crash.tumbleCurl =
+      reaction.family === 'rolling-tumble'
+        ? 0.5 + Math.sin(crash.rotation * 1.35) * 0.5
+        : 0;
+    crash.skiLift =
+      reaction.family === 'face-plant'
+        ? 0.7 + reaction.severity * 0.3
+        : reaction.family === 'rolling-tumble'
+          ? 0.35 + crash.tumbleCurl * 0.55
+          : reaction.family === 'obstacle-slam'
+            ? crash.treeStick * 0.45
+            : 0.18;
+    crash.armSpread =
+      reaction.family === 'obstacle-slam'
+        ? crash.treeStick
+        : reaction.family === 'rolling-tumble'
+          ? 1 - crash.tumbleCurl * 0.6
+          : reaction.family === 'side-spin'
+            ? 0.72
+            : 0.3;
     state.velocityX = this.crashVelocityX;
     state.velocityY = this.crashVelocityY;
   }
