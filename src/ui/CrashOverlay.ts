@@ -12,7 +12,7 @@ export class CrashOverlay {
     this.root.setAttribute('aria-label', 'Run crashed');
     this.root.innerHTML = `<div class="crash-card">
       <span>WIPEOUT</span>
-      <strong>Powder happens.</strong>
+      <strong data-crash-title>Powder happens.</strong>
       <p>You made it <b data-distance>0 m</b> downhill.</p>
       <div><button type="button" data-action="restart">Restart <kbd>R</kbd></button>
       <button type="button" data-action="replay">Copy replay link</button></div>
@@ -34,8 +34,17 @@ export class CrashOverlay {
     });
   }
 
-  show(distance: number, replay: string): void {
+  show(distance: number, replay: string, family = 'face-plant'): void {
     this.distance.textContent = `${Math.floor(distance)} m`;
+    const title = this.root.querySelector<HTMLElement>('[data-crash-title]')!;
+    title.textContent =
+      family === 'obstacle-slam'
+        ? 'Tree hugged back.'
+        : family === 'rolling-tumble'
+          ? 'Cartwheel season.'
+          : family === 'side-spin'
+            ? 'Style points, maybe.'
+            : 'Powder happens.';
     this.replay = replay;
     this.root.classList.add('visible');
   }

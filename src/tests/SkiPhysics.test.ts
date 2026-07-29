@@ -49,13 +49,12 @@ describe('ski physics', () => {
     expect(braking.state.velocityY).toBeLessThan(6);
   });
 
-  it('stops on crash and resets to the deterministic spawn state', () => {
+  it('advances a crash deterministically and resets to the spawn state', () => {
     const physics = new SkiPhysics();
     physics.step(1 / 60, { steer: 1, brake: false, tuck: true });
     physics.crash();
-    const crashPosition = { ...physics.state.position };
-    physics.step(1, { steer: 1, brake: false, tuck: true });
-    expect(physics.state.position).toEqual(crashPosition);
+    physics.step(1 / 60, { steer: 1, brake: false, tuck: true });
+    expect(physics.state.crash.elapsed).toBeCloseTo(1 / 60);
     expect(physics.state.crashed).toBe(true);
 
     physics.reset();

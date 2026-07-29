@@ -59,8 +59,10 @@ Cloudflare Workers are no longer part of development or deployment.
 - Drag downward: speed tuck; combine with left/right for a slower tuck turn
 - `R`: restart after a crash
 - `F3`: metrics overlay
+- `F4`: development crash laboratory
 - Development builds or `?dev=1`: `G` opens the pose inspector
 - `?dev=1&cameraTest=1`: procedural scale markers for camera evaluation
+- `?dev=1&crashLab=1`: collision visualization and controlled impact testing
 
 ## Verification and measurement
 
@@ -83,10 +85,12 @@ The bottom-left status chip includes the eight-character Git build identifier.
 Implemented: repository skeleton, WebGPU initialization and compatibility handling,
 TSL procedural snow, a small pose-driven TSL skier, wide forward-looking camera,
 60 Hz fixed simulation, basic carving, braking and tuck, camera-relative rebasing,
-deterministic shader-drawn trees and rocks, CPU circle collisions, crash/restart,
-replay-link serialization and playback, development pose/scale inspection, F3
-metrics, deterministic tests, screenshot capture, and a JSON/Markdown benchmark
-report.
+deterministic shader-drawn trees and rocks, CPU circle collisions, deterministic
+minor-contact reactions and four procedural crash families, crash/restart,
+replay-link serialization and playback, development pose/scale/crash inspection,
+F3 metrics, deterministic tests, crash-sequence capture, and JSON/Markdown
+benchmark reports. Crash selection uses speed, collision normal, contact offset,
+obstacle parameters, carve state, and controlled hash variation.
 
 Not implemented: clipmaps, GPU compute feature generation, tracks, jumping, gamepad
 input, expanded scoring, dynamic quality selection, WebGL 2 fallback, or persistent

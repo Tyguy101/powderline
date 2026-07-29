@@ -15,6 +15,7 @@
     "benchmark:potato": "tsx tools/benchmark/run-benchmark.ts --quality=potato --viewport=1280x720",
     "benchmark:mobile": "tsx tools/benchmark/run-benchmark.ts --quality=low --viewport=390x844",
     "capture": "tsx tools/capture/capture.ts",
+    "capture:crashes": "tsx tools/capture/crash-sequence.ts",
     "report": "tsx tools/benchmark/create-report.ts"
   },
   "dependencies": {

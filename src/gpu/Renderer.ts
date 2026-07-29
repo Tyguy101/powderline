@@ -18,6 +18,8 @@ import { createCameraMarkerShader } from './shaders/cameraMarkers';
 import { createSkierShader } from './shaders/skier';
 import { createSnowShader } from './shaders/snowBackground';
 import { createWorldFeatureShader } from './shaders/worldFeatures';
+import { createCollisionDebugShader } from './shaders/collisionDebug';
+import type { CrashReaction, ImpactContext } from '../simulation/CrashReaction';
 
 const BASE_VIEW_HEIGHT = 80;
 
@@ -29,10 +31,12 @@ export class GameRenderer {
   private readonly markers;
   private readonly features;
   private readonly skier;
+  private readonly collisionDebug;
   private readonly snowMesh: Mesh;
   private readonly markerMesh: Mesh;
   private readonly featureMesh: Mesh;
   private readonly skierMesh: Mesh;
+  private readonly collisionDebugMesh: Mesh;
   private viewWidth = BASE_VIEW_HEIGHT;
   private viewHeight = BASE_VIEW_HEIGHT;
   private cameraWorldX = 0;
@@ -40,6 +44,12 @@ export class GameRenderer {
   private markersVisible: boolean;
   private poseOverride: SkierPoseName | null = null;
   private readonly pose = createPoseParameters();
+  private shakeTime = 0;
+  private shakeStrength = 0;
+  private debugWorldX = 0;
+  private debugWorldY = 0;
+  private debugContactWorldX = 0;
+  private debugContactWorldY = 0;
 
   constructor(
     canvas: HTMLCanvasElement,
@@ -54,6 +64,7 @@ export class GameRenderer {
     this.markers = createCameraMarkerShader(seed);
     this.features = createWorldFeatureShader(seed);
     this.skier = createSkierShader();
+    this.collisionDebug = createCollisionDebugShader();
     this.snowMesh = new Mesh(new PlaneGeometry(1, 1), this.snow.material);
     this.snowMesh.position.z = -0.5;
     this.scene.add(this.snowMesh);
@@ -67,6 +78,10 @@ export class GameRenderer {
     this.skierMesh = new Mesh(new PlaneGeometry(4.6, 5.8), this.skier.material);
     this.skierMesh.position.z = 0.5;
     this.scene.add(this.skierMesh);
+    this.collisionDebugMesh = new Mesh(new PlaneGeometry(1, 1), this.collisionDebug.material);
+    this.collisionDebugMesh.position.z = 0.8;
+    this.collisionDebugMesh.visible = false;
+    this.scene.add(this.collisionDebugMesh);
   }
 
   async initialize(): Promise<void> {
@@ -83,6 +98,7 @@ export class GameRenderer {
     const targetY = state.position.y + this.viewHeight * (0.19 + speedLookAhead * 0.055);
     this.cameraWorldY +=
       (targetY - this.cameraWorldY) * (1 - Math.exp(-deltaSeconds * 5.5));
+    this.shakeTime = Math.max(0, this.shakeTime - deltaSeconds);
   }
 
   draw(
@@ -108,8 +124,28 @@ export class GameRenderer {
     this.skier.crash.value = pose.crash;
     this.skier.spray.value = pose.spray;
     this.skier.stopped.value = pose.stopped;
-    this.skierMesh.position.x = state.position.x - this.cameraWorldX;
-    this.skierMesh.position.y = this.cameraWorldY - state.position.y;
+    const crash = state.crash;
+    this.skier.crashStyle.value =
+      crash.family === 'side-spin' ? 1 : crash.family === 'rolling-tumble' ? 2 : crash.family === 'obstacle-slam' ? 3 : 0;
+    this.skier.equipmentSpread.value = crash.equipmentSpread;
+    this.skier.snowBurst.value = crash.snowBurst;
+    const shake =
+      this.shakeTime > 0
+        ? Math.sin(this.shakeTime * 83) * this.shakeStrength * (this.shakeTime / 0.32)
+        : 0;
+    this.skierMesh.position.x = state.position.x - this.cameraWorldX + shake;
+    this.skierMesh.position.y = this.cameraWorldY - state.position.y + crash.lift * 1.8 - shake * 0.45;
+    this.skierMesh.rotation.z = crash.active ? crash.rotation : state.wobble * 0.12;
+    this.skierMesh.scale.set(1 + crash.squash * 0.26, 1 - crash.squash * 0.34, 1);
+    if (this.collisionDebugMesh.visible) {
+      this.collisionDebug.skierX.value = state.position.x - this.cameraWorldX;
+      this.collisionDebug.skierY.value = state.position.y - this.cameraWorldY;
+      this.collisionDebug.obstacleX.value = this.debugWorldX - this.cameraWorldX;
+      this.collisionDebug.obstacleY.value = this.debugWorldY - this.cameraWorldY;
+      this.collisionDebug.contactX.value = this.debugContactWorldX - this.cameraWorldX;
+      this.collisionDebug.contactY.value = this.debugContactWorldY - this.cameraWorldY;
+      this.collisionDebugMesh.position.set(0, 0, 0.8);
+    }
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -127,12 +163,35 @@ export class GameRenderer {
     this.markerMesh.visible = visible;
   }
 
+  setImpactDebug(
+    context: Readonly<ImpactContext>,
+    reaction: Readonly<CrashReaction>,
+    debugVisible = true,
+  ): void {
+    this.debugWorldX = context.contactX - context.normalX * context.obstacleRadius;
+    this.debugWorldY = context.contactY - context.normalY * context.obstacleRadius;
+    this.debugContactWorldX = context.contactX;
+    this.debugContactWorldY = context.contactY;
+    this.collisionDebug.obstacleRadius.value = context.obstacleRadius;
+    this.collisionDebug.normalX.value = context.normalX;
+    this.collisionDebug.normalY.value = context.normalY;
+    this.collisionDebug.velocityX.value = context.velocityX;
+    this.collisionDebug.velocityY.value = context.velocityY;
+    this.collisionDebugMesh.visible = debugVisible;
+    this.shakeTime = 0.32;
+    this.shakeStrength = reaction.strength * 0.38;
+  }
+
+  clearImpactDebug(): void {
+    this.collisionDebugMesh.visible = false;
+  }
+
   get markersEnabled(): boolean {
     return this.markersVisible;
   }
 
   get drawCalls(): number {
-    return this.markersVisible ? 4 : 3;
+    return 3 + Number(this.markersVisible) + Number(this.collisionDebugMesh.visible);
   }
 
   get visibleFeatureEstimate(): number {
@@ -148,12 +207,15 @@ export class GameRenderer {
     this.snowMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.markerMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.featureMesh.scale.set(this.viewWidth, this.viewHeight, 1);
+    this.collisionDebugMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.snow.viewWidth.value = this.viewWidth;
     this.snow.viewHeight.value = this.viewHeight;
     this.markers.viewWidth.value = this.viewWidth;
     this.markers.viewHeight.value = this.viewHeight;
     this.features.viewWidth.value = this.viewWidth;
     this.features.viewHeight.value = this.viewHeight;
+    this.collisionDebug.viewWidth.value = this.viewWidth;
+    this.collisionDebug.viewHeight.value = this.viewHeight;
     this.camera.left = -this.viewWidth / 2;
     this.camera.right = this.viewWidth / 2;
     this.camera.top = this.viewHeight / 2;

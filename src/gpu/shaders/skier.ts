@@ -44,6 +44,9 @@ export interface SkierShader {
   readonly crash: ReturnType<typeof uniform>;
   readonly spray: ReturnType<typeof uniform>;
   readonly stopped: ReturnType<typeof uniform>;
+  readonly crashStyle: ReturnType<typeof uniform>;
+  readonly equipmentSpread: ReturnType<typeof uniform>;
+  readonly snowBurst: ReturnType<typeof uniform>;
 }
 
 export function createSkierShader(): SkierShader {
@@ -57,6 +60,9 @@ export function createSkierShader(): SkierShader {
   const crash = uniform(0);
   const spray = uniform(0);
   const stopped = uniform(0);
+  const crashStyle = uniform(0);
+  const equipmentSpread = uniform(0);
+  const snowBurst = uniform(0);
   const point = uv().sub(0.5);
   const bodyX = lean.mul(0.085).add(traverse.mul(0.025));
   const bodyY = float(0.075).sub(crouch.mul(0.075)).add(air.mul(0.07));
@@ -107,10 +113,11 @@ export function createSkierShader(): SkierShader {
     rightBoot.x.sub(skiDrift.mul(0.48)).add(wedge.mul(0.07)).sub(air.mul(0.055)),
     rightBoot.y.add(skiRise.mul(0.56)),
   );
-  leftSkiStart = mix(leftSkiStart, vec2(-0.34, -0.17), crash);
-  leftSkiEnd = mix(leftSkiEnd, vec2(0.1, -0.05), crash);
-  rightSkiStart = mix(rightSkiStart, vec2(-0.12, 0.05), crash);
-  rightSkiEnd = mix(rightSkiEnd, vec2(0.35, -0.23), crash);
+  const spread = equipmentSpread.mul(0.18);
+  leftSkiStart = mix(leftSkiStart, vec2(float(-0.26).sub(spread), -0.18), crash);
+  leftSkiEnd = mix(leftSkiEnd, vec2(0.08, float(-0.04).add(crashStyle.mul(0.04))), crash);
+  rightSkiStart = mix(rightSkiStart, vec2(-0.08, float(0.03).add(crashStyle.mul(0.035))), crash);
+  rightSkiEnd = mix(rightSkiEnd, vec2(float(0.27).add(spread), -0.22), crash);
 
   const shoulderLeft = vec2(neck.x.sub(0.075), neck.y.sub(0.04));
   const shoulderRight = vec2(neck.x.add(0.075), neck.y.sub(0.04));
@@ -137,8 +144,8 @@ export function createSkierShader(): SkierShader {
       .add(landing.mul(0.055))
       .add(air.mul(0.055)),
   );
-  leftHand = mix(leftHand, vec2(-0.32, 0.12), crash);
-  rightHand = mix(rightHand, vec2(0.29, -0.02), crash);
+  leftHand = mix(leftHand, vec2(float(-0.28).sub(spread), 0.12), crash);
+  rightHand = mix(rightHand, vec2(float(0.27).add(spread), -0.02), crash);
 
   // The skier faces downhill toward the bottom of the screen, so poles and
   // spray trail uphill toward the top of the screen.
@@ -154,7 +161,8 @@ export function createSkierShader(): SkierShader {
   );
   const sprayLeft = ellipse(point, leftSkiEnd.add(vec2(-0.035, 0.02)), vec2(0.13, 0.07));
   const sprayRight = ellipse(point, rightSkiEnd.add(vec2(0.035, 0.02)), vec2(0.13, 0.07));
-  const sprayMask = max(sprayLeft, sprayRight).mul(spray).mul(float(1).sub(air));
+  const crashCloud = ellipse(point, vec2(0, -0.08), vec2(0.34, 0.19)).mul(snowBurst);
+  const sprayMask = max(max(sprayLeft, sprayRight).mul(spray).mul(float(1).sub(air)), crashCloud);
 
   const leftSki = capsule(point, leftSkiStart, leftSkiEnd, 0.018);
   const rightSki = capsule(point, rightSkiStart, rightSkiEnd, 0.018);
@@ -221,5 +229,8 @@ export function createSkierShader(): SkierShader {
     crash,
     spray,
     stopped,
+    crashStyle,
+    equipmentSpread,
+    snowBurst,
   };
 }

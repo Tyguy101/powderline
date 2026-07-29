@@ -9,6 +9,7 @@ export interface GameConfig {
   readonly developmentMode: boolean;
   readonly cameraTestMode: boolean;
   readonly poseGalleryMode: boolean;
+  readonly crashLabMode: boolean;
   readonly replay: string | null;
 }
 
@@ -25,6 +26,7 @@ export const GAME_CONFIG: GameConfig = {
   developmentMode: import.meta.env.DEV || query.has('dev'),
   cameraTestMode: query.has('cameraTest'),
   poseGalleryMode: query.has('poseGallery'),
+  crashLabMode: query.has('crashLab'),
   replay: replayWorldSeed === null ? null : replay,
   quality:
     quality === 'potato' || quality === 'low' || quality === 'high'

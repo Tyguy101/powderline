@@ -6,9 +6,11 @@ import { InputManager } from '../input/InputManager';
 import { SkiPhysics } from '../simulation/SkiPhysics';
 import { CollisionSystem } from '../simulation/CollisionSystem';
 import { ReplaySystem } from '../simulation/ReplaySystem';
+import { selectCrashReaction, type ImpactContext } from '../simulation/CrashReaction';
 import { CrashOverlay } from '../ui/CrashOverlay';
 import { HUD } from '../ui/HUD';
 import { PoseGallery } from '../ui/PoseGallery';
+import { CrashLab } from '../ui/CrashLab';
 import { BUILD_ID } from './build';
 import type { GameConfig } from './config';
 
@@ -24,6 +26,7 @@ export class Game {
   private readonly crashOverlay: CrashOverlay;
   private readonly loop: FixedStepLoop;
   private poseInspectionActive = false;
+  private crashPromptShown = false;
 
   constructor(
     root: HTMLElement,
@@ -51,6 +54,12 @@ export class Game {
         this.renderer.markersEnabled,
         config.poseGalleryMode,
       );
+      new CrashLab(
+        root,
+        (settings) => this.triggerLabCrash(settings),
+        () => this.restart(),
+        config.crashLabMode,
+      );
     }
     this.origin = new CameraRelativeOrigin(config.rebaseDistance);
     this.loop = new FixedStepLoop(
@@ -58,13 +67,52 @@ export class Game {
       config.maxFrameSeconds,
       (delta) => {
         if (this.input.consumeRestart() && this.physics.state.crashed) this.restart();
-        if (!this.poseInspectionActive && !this.physics.state.crashed) {
-          const replayInput = this.replay.sample(this.input.state);
+        if (!this.poseInspectionActive) {
+          const replayInput = this.physics.state.crashed
+            ? this.input.state
+            : this.replay.sample(this.input.state);
           this.physics.step(delta, replayInput);
-          const hit = this.collision.query(this.physics.state);
-          if (hit) {
-            this.physics.crash();
-            this.crashOverlay.show(this.physics.state.position.y, this.replay.serialize());
+          if (!this.physics.state.crashed && this.physics.canCollide()) {
+            const hit = this.collision.query(this.physics.state);
+            if (hit && hit.feature.type !== 'none') {
+              const state = this.physics.state;
+              const context: ImpactContext = {
+                seed: this.config.seed,
+                obstacleId: hit.feature.id,
+                obstacleType: hit.feature.type,
+                obstacleRadius: hit.feature.radius,
+                speed: Math.hypot(state.velocityX, state.velocityY),
+                velocityX: state.velocityX,
+                velocityY: state.velocityY,
+                facing: state.facing,
+                carve: state.carve,
+                airborneHeight: state.airborneHeight,
+                normalX: hit.normalX,
+                normalY: hit.normalY,
+                contactX: hit.contactX,
+                contactY: hit.contactY,
+                contactOffset: hit.contactOffset,
+              };
+              const reaction = selectCrashReaction(context);
+              this.renderer.setImpactDebug(context, reaction, this.config.developmentMode);
+              if (reaction.outcome === 'crash') {
+                this.physics.beginCrash(context, reaction);
+              } else {
+                this.physics.applyMinorImpact(context, reaction);
+              }
+            }
+          }
+          if (
+            this.physics.state.crashed &&
+            !this.crashPromptShown &&
+            this.physics.state.crash.elapsed >= this.physics.state.crash.duration
+          ) {
+            this.crashPromptShown = true;
+            this.crashOverlay.show(
+              this.physics.state.position.y,
+              this.replay.serialize(),
+              this.physics.state.crash.family,
+            );
           }
         }
         this.renderer.updateCamera(this.physics.state, delta);
@@ -79,6 +127,52 @@ export class Game {
     this.origin.reset(this.physics.state.position);
     this.renderer.resetCamera(this.physics.state);
     this.crashOverlay.hide();
+    this.crashPromptShown = false;
+    this.renderer.clearImpactDebug();
+  }
+
+  private triggerLabCrash(settings: {
+    obstacleType: 'tree' | 'rock';
+    speed: number;
+    angle: number;
+    contactOffset: number;
+    airborne: boolean;
+    severityBias: number;
+    variation: number;
+  }): string {
+    this.restart();
+    const radians = settings.angle * Math.PI / 180;
+    const state = this.physics.state;
+    state.velocityX = Math.sin(radians) * settings.speed;
+    state.velocityY = Math.cos(radians) * settings.speed;
+    state.airborneHeight = settings.airborne ? 1.4 : 0;
+    const context: ImpactContext = {
+      seed: this.config.seed,
+      obstacleId: 0x1ab000 + settings.variation,
+      obstacleType: settings.obstacleType,
+      obstacleRadius: settings.obstacleType === 'tree' ? 1.12 : 0.9,
+      speed: settings.speed * settings.severityBias,
+      velocityX: state.velocityX,
+      velocityY: state.velocityY,
+      facing: state.facing,
+      carve: state.carve,
+      airborneHeight: state.airborneHeight,
+      normalX: -Math.sin(radians) * (1 - Math.abs(settings.contactOffset) * 0.65) +
+        settings.contactOffset * 0.65,
+      normalY: -Math.cos(radians) * (1 - Math.abs(settings.contactOffset) * 0.65),
+      contactX: state.position.x,
+      contactY: state.position.y + 0.8,
+      contactOffset: settings.contactOffset,
+      variation: settings.variation,
+    };
+    const normalLength = Math.max(0.001, Math.hypot(context.normalX, context.normalY));
+    context.normalX /= normalLength;
+    context.normalY /= normalLength;
+    const reaction = selectCrashReaction(context);
+    this.renderer.setImpactDebug(context, reaction);
+    if (reaction.outcome === 'crash') this.physics.beginCrash(context, reaction);
+    else this.physics.applyMinorImpact(context, reaction);
+    return `${reaction.outcome} · ${reaction.family} · strength ${reaction.strength.toFixed(2)}`;
   }
 
   async start(): Promise<void> {
