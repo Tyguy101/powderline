@@ -60,6 +60,9 @@ export interface CrashVisualState {
   tumbleCurl: number;
   skiLift: number;
   armSpread: number;
+  trailActive: boolean;
+  trailStartX: number;
+  trailStartY: number;
   elapsed: number;
   duration: number;
   contactX: number;
@@ -88,6 +91,9 @@ export function createCrashVisualState(): CrashVisualState {
     tumbleCurl: 0,
     skiLift: 0,
     armSpread: 0,
+    trailActive: false,
+    trailStartX: 0,
+    trailStartY: 0,
     elapsed: 0,
     duration: 0,
     contactX: 0,
@@ -171,11 +177,16 @@ export function selectCrashReaction(context: Readonly<ImpactContext>): CrashReac
         : severity * 0.12;
   const squash = family === 'obstacle-slam' ? 0.55 + severity * 0.35 : 0.08;
   const equipmentSpread = clamp01(severity * 0.75 + rareExaggeration * 0.25);
-  const impactDuration = 0.12 + (family === 'obstacle-slam' ? 0.16 : 0.04);
-  const launchDuration = 0.22 + launch * 0.46;
+  const impactDuration = family === 'obstacle-slam' ? 0.2 : 0.16;
+  const launchDuration = family === 'obstacle-slam' ? 0 : 0.22 + launch * 0.46;
   const followDuration =
-    0.52 + severity * 1.55 + rolls * 0.24 + (family === 'obstacle-slam' ? 0.22 : 0);
-  const duration = impactDuration + launchDuration + followDuration + 0.35 + variant * 0.38;
+    family === 'obstacle-slam'
+      ? 1.8 + variant * 0.28
+      : 0.52 + severity * 1.55 + rolls * 0.24;
+  const duration =
+    family === 'obstacle-slam'
+      ? impactDuration + followDuration
+      : impactDuration + launchDuration + followDuration + 0.8 + variant * 0.38;
 
   return {
     outcome,

@@ -146,7 +146,7 @@ export class GameRenderer {
     this.treeForegroundMesh.visible =
       crash.active &&
       crash.family === 'obstacle-slam' &&
-      (crash.phase === 'impact' || crash.phase === 'launch');
+      crash.phase !== 'rest';
     this.skier.crashStyle.value =
       crash.family === 'side-spin' ? 1 : crash.family === 'rolling-tumble' ? 2 : crash.family === 'obstacle-slam' ? 3 : 0;
     this.skier.equipmentSpread.value = crash.equipmentSpread;
@@ -161,14 +161,15 @@ export class GameRenderer {
     // legacy skier-local groove disabled so the mark does not move with the rig.
     this.skier.slideTrail.value = 0;
     this.skier.slideSpray.value = crash.slideTrail;
-    this.crashTrailMesh.visible = crash.active;
+    this.crashTrailMesh.visible = crash.active && crash.trailActive;
     this.crashTrail.worldX.value = this.cameraWorldX;
     this.crashTrail.worldY.value = this.cameraWorldY;
-    this.crashTrail.startX.value = crash.contactX;
-    this.crashTrail.startY.value = crash.contactY;
+    this.crashTrail.startX.value = crash.trailStartX;
+    this.crashTrail.startY.value = crash.trailStartY;
     this.crashTrail.endX.value = state.position.x;
     this.crashTrail.endY.value = state.position.y;
-    this.crashTrail.intensity.value = crash.active ? 0.45 + crash.severity * 0.55 : 0;
+    this.crashTrail.intensity.value =
+      crash.active && crash.trailActive ? 0.45 + crash.severity * 0.55 : 0;
     this.crashTrail.family.value =
       crash.family === 'face-plant' ? 0 : crash.family === 'side-spin' ? 1 : crash.family === 'rolling-tumble' ? 2 : 3;
     const shake =
