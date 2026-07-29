@@ -92,19 +92,19 @@ export function createSkierShader(): SkierShader {
   const skiDrift = skiHeading.mul(0.24);
   const skiRise = float(0.29).sub(abs(skiHeading).mul(0.105)).add(air.mul(0.025));
   let leftSkiStart: Node<'vec2'> = vec2(
-    leftBoot.x.sub(skiDrift.mul(0.52)).sub(wedge.mul(0.07)).sub(air.mul(0.12)),
+    leftBoot.x.add(skiDrift.mul(0.52)).add(wedge.mul(0.025)).sub(air.mul(0.12)),
     leftBoot.y.sub(skiRise.mul(0.56)),
   );
   let leftSkiEnd: Node<'vec2'> = vec2(
-    leftBoot.x.add(skiDrift.mul(0.48)).add(wedge.mul(0.025)).add(air.mul(0.055)),
+    leftBoot.x.sub(skiDrift.mul(0.48)).sub(wedge.mul(0.07)).add(air.mul(0.055)),
     leftBoot.y.add(skiRise.mul(0.56)),
   );
   let rightSkiStart: Node<'vec2'> = vec2(
-    rightBoot.x.sub(skiDrift.mul(0.52)).add(wedge.mul(0.07)).add(air.mul(0.12)),
+    rightBoot.x.add(skiDrift.mul(0.52)).sub(wedge.mul(0.025)).add(air.mul(0.12)),
     rightBoot.y.sub(skiRise.mul(0.56)),
   );
   let rightSkiEnd: Node<'vec2'> = vec2(
-    rightBoot.x.add(skiDrift.mul(0.48)).sub(wedge.mul(0.025)).sub(air.mul(0.055)),
+    rightBoot.x.sub(skiDrift.mul(0.48)).add(wedge.mul(0.07)).sub(air.mul(0.055)),
     rightBoot.y.add(skiRise.mul(0.56)),
   );
   leftSkiStart = mix(leftSkiStart, vec2(-0.34, -0.17), crash);

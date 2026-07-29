@@ -23,10 +23,11 @@ Open the displayed local address. Use `?seed=424242`, `?quality=potato`, or
 
 - `A` / Left Arrow: carve left
 - `D` / Right Arrow: carve right
-- `S` / Down Arrow: brake
-- `W` / Up Arrow: speed tuck
+- `W` / Up Arrow: brake
+- `S` / Down Arrow: speed tuck
 - Drag horizontally: steer on pointer and touch devices
-- Press or hold near the bottom of the screen: brake
+- Press or hold near the top of the screen: brake
+- Press or hold near the bottom of the screen: speed tuck
 - `F3`: metrics overlay
 - Development builds or `?dev=1`: `G` opens the pose inspector
 - `?dev=1&cameraTest=1`: procedural scale markers for camera evaluation

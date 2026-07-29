@@ -28,23 +28,24 @@ export class InputManager {
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') this.left = true;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') this.right = true;
-    if (event.code === 'ArrowDown' || event.code === 'KeyS') this.state.brake = true;
-    if (event.code === 'ArrowUp' || event.code === 'KeyW') this.state.tuck = true;
+    if (event.code === 'ArrowUp' || event.code === 'KeyW') this.state.brake = true;
+    if (event.code === 'ArrowDown' || event.code === 'KeyS') this.state.tuck = true;
     this.updateKeyboard();
   };
 
   private readonly onKeyUp = (event: KeyboardEvent): void => {
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') this.left = false;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') this.right = false;
-    if (event.code === 'ArrowDown' || event.code === 'KeyS') this.state.brake = false;
-    if (event.code === 'ArrowUp' || event.code === 'KeyW') this.state.tuck = false;
+    if (event.code === 'ArrowUp' || event.code === 'KeyW') this.state.brake = false;
+    if (event.code === 'ArrowDown' || event.code === 'KeyS') this.state.tuck = false;
     this.updateKeyboard();
   };
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.pointerActive = true;
     this.pointerStartX = event.clientX;
-    this.state.brake = event.clientY > innerHeight * 0.78;
+    this.state.brake = event.clientY < innerHeight * 0.22;
+    this.state.tuck = event.clientY > innerHeight * 0.78;
     this.surface.setPointerCapture(event.pointerId);
   };
 
@@ -57,5 +58,6 @@ export class InputManager {
     this.pointerActive = false;
     this.state.steer = 0;
     this.state.brake = false;
+    this.state.tuck = false;
   };
 }

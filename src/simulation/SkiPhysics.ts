@@ -27,6 +27,7 @@ export class SkiPhysics {
     state.velocityX += state.carve * steeringForce * delta;
     state.velocityX *= Math.exp(-1.65 * delta);
     state.velocityY += 8.4 * delta;
+    if (input.tuck) state.velocityY += 4.8 * delta;
     const traverseDrag = 1 + Math.abs(state.carve) * 0.38;
     state.velocityY *= Math.exp(-0.22 * traverseDrag * delta);
     if (input.brake) state.velocityY *= Math.exp(-2.4 * delta);
