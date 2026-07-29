@@ -85,8 +85,12 @@ export function createSkierShader(): SkierShader {
     mix(hip.y, rightBoot.y, 0.5).add(crouch.mul(0.035)),
   );
 
-  const skiDrift = traverse.mul(0.2);
-  const skiRise = float(0.29).sub(abs(traverse).mul(0.105)).add(air.mul(0.025));
+  // Keep the skis aligned with the skier's downhill travel direction. Turn
+  // poses primarily communicate direction through lean, while traversal poses
+  // also provide an explicit lateral component.
+  const skiHeading = clamp(traverse.add(lean.mul(0.72)), -1, 1);
+  const skiDrift = skiHeading.mul(0.24);
+  const skiRise = float(0.29).sub(abs(skiHeading).mul(0.105)).add(air.mul(0.025));
   let leftSkiStart: Node<'vec2'> = vec2(
     leftBoot.x.sub(skiDrift.mul(0.52)).sub(wedge.mul(0.07)).sub(air.mul(0.12)),
     leftBoot.y.sub(skiRise.mul(0.56)),
