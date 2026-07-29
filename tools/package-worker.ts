@@ -10,8 +10,10 @@ const generatedConfig = JSON.parse(
   await readFile(path.join(workerOutput, 'wrangler.json'), 'utf8'),
 ) as {
   main: string;
+  legacy_env?: boolean;
   assets?: { directory?: string };
 };
 generatedConfig.main = 'server/index.js';
+delete generatedConfig.legacy_env;
 if (generatedConfig.assets) generatedConfig.assets.directory = 'client';
 await writeFile(path.resolve('dist/wrangler.json'), JSON.stringify(generatedConfig, null, 2));
