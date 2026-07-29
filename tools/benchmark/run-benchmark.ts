@@ -48,9 +48,7 @@ try {
       process.platform === 'win32'
         ? 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe'
         : undefined,
-    // Let Chrome select the native Dawn backend. Forcing ANGLE/Vulkan can make
-    // WebGPURenderer fall back to WebGL on Windows, which cannot run storage textures.
-    args: ['--enable-unsafe-webgpu'],
+    args: ['--enable-unsafe-webgpu', '--enable-features=Vulkan', '--use-angle=vulkan'],
   });
   const page = await browser.newPage({ viewport: { width, height } });
   const errors: string[] = [];

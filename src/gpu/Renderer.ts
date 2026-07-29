@@ -22,7 +22,7 @@ import { createCollisionDebugShader } from './shaders/collisionDebug';
 import type { CrashReaction, ImpactContext } from '../simulation/CrashReaction';
 import { createCrashTrailShader } from './shaders/crashTrail';
 import { createTreeForegroundShader } from './shaders/treeForeground';
-import { PersistentSnowMask } from './PersistentSnowMask';
+import { TrackTrailBuffer } from './TrackTrailBuffer';
 
 const BASE_VIEW_HEIGHT = 80;
 
@@ -37,7 +37,7 @@ export class GameRenderer {
   private readonly collisionDebug;
   private readonly crashTrail;
   private readonly treeForeground;
-  private readonly snowMask = new PersistentSnowMask();
+  private readonly tracks = new TrackTrailBuffer();
   private readonly snowMesh: Mesh;
   private readonly markerMesh: Mesh;
   private readonly featureMesh: Mesh;
@@ -68,12 +68,7 @@ export class GameRenderer {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
     this.camera.position.z = 2;
     this.markersVisible = cameraTestMode;
-    this.snow = createSnowShader(
-      seed,
-      this.snowMask.texture,
-      this.snowMask.time,
-      this.snowMask.resetTime,
-    );
+    this.snow = createSnowShader(seed);
     this.markers = createCameraMarkerShader(seed);
     this.features = createWorldFeatureShader(seed);
     this.skier = createSkierShader();
@@ -90,6 +85,7 @@ export class GameRenderer {
     this.featureMesh = new Mesh(new PlaneGeometry(1, 1), this.features.material);
     this.featureMesh.position.z = 0.25;
     this.scene.add(this.featureMesh);
+    this.scene.add(this.tracks.mesh);
     this.crashTrailMesh = new Mesh(new PlaneGeometry(1, 1), this.crashTrail.material);
     this.crashTrailMesh.position.z = 0.38;
     this.crashTrailMesh.visible = false;
@@ -137,6 +133,7 @@ export class GameRenderer {
     this.markers.worldY.value = this.cameraWorldY - origin.y;
     this.features.worldX.value = this.cameraWorldX;
     this.features.worldY.value = this.cameraWorldY;
+    this.tracks.updateCamera(this.cameraWorldX, this.cameraWorldY);
     this.treeForeground.worldX.value = this.cameraWorldX;
     this.treeForeground.worldY.value = this.cameraWorldY;
     this.skier.lean.value = pose.lean;
@@ -207,7 +204,6 @@ export class GameRenderer {
       this.collisionDebug.contactY.value = this.debugContactWorldY - this.cameraWorldY;
       this.collisionDebugMesh.position.set(0, 0, 0.8);
     }
-    this.snowMask.flush(this.renderer);
     this.renderer.render(this.scene, this.camera);
   }
 
@@ -221,11 +217,11 @@ export class GameRenderer {
   }
 
   recordTrail(state: Readonly<SkiState>, deltaSeconds: number): void {
-    this.snowMask.record(state, deltaSeconds);
+    this.tracks.record(state, deltaSeconds);
   }
 
   resetTrail(state: Readonly<SkiState>): void {
-    this.snowMask.reset(state);
+    this.tracks.reset(state);
   }
 
   setMarkersVisible(visible: boolean): void {
@@ -261,7 +257,7 @@ export class GameRenderer {
   }
 
   get drawCalls(): number {
-    return 3 + Number(this.treeForegroundMesh.visible) + Number(this.crashTrailMesh.visible) +
+    return 4 + Number(this.treeForegroundMesh.visible) + Number(this.crashTrailMesh.visible) +
       Number(this.markersVisible) +
       Number(this.collisionDebugMesh.visible);
   }
@@ -271,7 +267,7 @@ export class GameRenderer {
   }
 
   get trackSampleCount(): number {
-    return this.snowMask.stampCount;
+    return this.tracks.sampleCount;
   }
 
   private readonly resize = (): void => {
