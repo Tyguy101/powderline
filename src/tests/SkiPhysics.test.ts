@@ -6,7 +6,7 @@ describe('ski physics', () => {
     const a = new SkiPhysics();
     const b = new SkiPhysics();
     for (let index = 0; index < 600; index += 1) {
-      const input = { steer: index < 240 ? 0.6 : -0.2, brake: index > 480 };
+      const input = { steer: index < 240 ? 0.6 : -0.2, brake: index > 480, tuck: false };
       a.step(1 / 60, input);
       b.step(1 / 60, input);
     }

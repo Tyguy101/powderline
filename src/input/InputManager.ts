@@ -1,7 +1,7 @@
 import type { InputState } from './InputState';
 
 export class InputManager {
-  readonly state: InputState = { steer: 0, brake: false };
+  readonly state: InputState = { steer: 0, brake: false, tuck: false };
   private left = false;
   private right = false;
   private pointerActive = false;
@@ -29,6 +29,7 @@ export class InputManager {
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') this.left = true;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') this.right = true;
     if (event.code === 'ArrowDown' || event.code === 'KeyS') this.state.brake = true;
+    if (event.code === 'ArrowUp' || event.code === 'KeyW') this.state.tuck = true;
     this.updateKeyboard();
   };
 
@@ -36,6 +37,7 @@ export class InputManager {
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') this.left = false;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') this.right = false;
     if (event.code === 'ArrowDown' || event.code === 'KeyS') this.state.brake = false;
+    if (event.code === 'ArrowUp' || event.code === 'KeyW') this.state.tuck = false;
     this.updateKeyboard();
   };
 

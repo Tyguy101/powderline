@@ -18,7 +18,7 @@ export class HUD {
           <div><span class="label">SPEED</span><strong id="speed">0 km/h</strong></div>
         </div>
       </header>
-      <div class="hint"><kbd>A</kbd><kbd>D</kbd> carve <span>•</span> <kbd>S</kbd> brake <span>•</span> drag to steer</div>
+      <div class="hint"><kbd>A</kbd><kbd>D</kbd> carve <span>•</span> <kbd>S</kbd> brake <span>•</span> <kbd>W</kbd> tuck <span>•</span> drag to steer${config.developmentMode ? ' <span>•</span> <kbd>G</kbd> poses' : ''}</div>
       <aside id="debug" class="debug" aria-live="polite"></aside>
       <div class="status-chip"><i></i> WEBGPU PROCEDURAL</div>`,
     );
@@ -34,7 +34,12 @@ export class HUD {
     this.debug.dataset.seed = String(config.seed);
   }
 
-  update(state: Readonly<SkiState>, metrics: Readonly<MetricsSnapshot>, config: GameConfig): void {
+  update(
+    state: Readonly<SkiState>,
+    metrics: Readonly<MetricsSnapshot>,
+    config: GameConfig,
+    drawCalls: number,
+  ): void {
     this.distance.textContent = `${Math.floor(state.position.y)} m`;
     this.speed.textContent = `${Math.round(Math.hypot(state.velocityX, state.velocityY) * 3.6)} km/h`;
     this.debug.classList.toggle('visible', this.debugVisible);
@@ -45,7 +50,7 @@ AVG <em>${metrics.averageMs.toFixed(2)} ms</em>
 1% LOW <em>${metrics.onePercentLowFps.toFixed(1)} fps</em>
 SIM <em>60 Hz fixed</em>
 SUBMIT <em>browser timed</em>
-DRAWS <em>2</em>
+DRAWS <em>${drawCalls}</em>
 FEATURES <em>0 / 0</em>
 CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>

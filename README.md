@@ -24,9 +24,12 @@ Open the displayed local address. Use `?seed=424242`, `?quality=potato`, or
 - `A` / Left Arrow: carve left
 - `D` / Right Arrow: carve right
 - `S` / Down Arrow: brake
+- `W` / Up Arrow: speed tuck
 - Drag horizontally: steer on pointer and touch devices
 - Press or hold near the bottom of the screen: brake
 - `F3`: metrics overlay
+- Development builds or `?dev=1`: `G` opens the pose inspector
+- `?dev=1&cameraTest=1`: procedural scale markers for camera evaluation
 
 ## Verification and measurement
 
@@ -45,8 +48,9 @@ Benchmark output is written to `tools/reports/` and intentionally ignored by Git
 ## Status
 
 Implemented: repository skeleton, WebGPU initialization and compatibility handling,
-TSL procedural snow, TSL procedural skier, 60 Hz fixed simulation, basic carving
-and braking, camera-relative rebasing, F3 metrics, deterministic tests, screenshot
+TSL procedural snow, a small pose-driven TSL skier, wide forward-looking camera,
+60 Hz fixed simulation, basic carving, braking and tuck, camera-relative rebasing,
+development pose/scale inspection, F3 metrics, deterministic tests, screenshot
 capture, and a JSON/Markdown benchmark report.
 
 Not implemented: obstacles, collisions, clipmaps, GPU compute feature generation,
