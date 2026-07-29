@@ -20,4 +20,9 @@ export class CameraRelativeOrigin {
   relative(position: Readonly<WorldPosition>): WorldPosition {
     return { x: position.x - this.origin.x, y: position.y - this.origin.y };
   }
+
+  reset(position: Readonly<WorldPosition>): void {
+    this.origin.x = position.x;
+    this.origin.y = position.y;
+  }
 }

@@ -17,6 +17,7 @@ import type { SkiState } from '../simulation/SkiPhysics';
 import { createCameraMarkerShader } from './shaders/cameraMarkers';
 import { createSkierShader } from './shaders/skier';
 import { createSnowShader } from './shaders/snowBackground';
+import { createWorldFeatureShader } from './shaders/worldFeatures';
 
 const BASE_VIEW_HEIGHT = 80;
 
@@ -26,9 +27,11 @@ export class GameRenderer {
   private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
   private readonly snow;
   private readonly markers;
+  private readonly features;
   private readonly skier;
   private readonly snowMesh: Mesh;
   private readonly markerMesh: Mesh;
+  private readonly featureMesh: Mesh;
   private readonly skierMesh: Mesh;
   private viewWidth = BASE_VIEW_HEIGHT;
   private viewHeight = BASE_VIEW_HEIGHT;
@@ -49,6 +52,7 @@ export class GameRenderer {
     this.markersVisible = cameraTestMode;
     this.snow = createSnowShader(seed);
     this.markers = createCameraMarkerShader(seed);
+    this.features = createWorldFeatureShader(seed);
     this.skier = createSkierShader();
     this.snowMesh = new Mesh(new PlaneGeometry(1, 1), this.snow.material);
     this.snowMesh.position.z = -0.5;
@@ -57,6 +61,9 @@ export class GameRenderer {
     this.markerMesh.position.z = 0;
     this.markerMesh.visible = this.markersVisible;
     this.scene.add(this.markerMesh);
+    this.featureMesh = new Mesh(new PlaneGeometry(1, 1), this.features.material);
+    this.featureMesh.position.z = 0.25;
+    this.scene.add(this.featureMesh);
     this.skierMesh = new Mesh(new PlaneGeometry(4.6, 5.8), this.skier.material);
     this.skierMesh.position.z = 0.5;
     this.scene.add(this.skierMesh);
@@ -89,6 +96,8 @@ export class GameRenderer {
     this.snow.worldY.value = this.cameraWorldY - origin.y;
     this.markers.worldX.value = this.cameraWorldX - origin.x;
     this.markers.worldY.value = this.cameraWorldY - origin.y;
+    this.features.worldX.value = this.cameraWorldX;
+    this.features.worldY.value = this.cameraWorldY;
     this.skier.lean.value = pose.lean;
     this.skier.traverse.value = pose.traverse;
     this.skier.crouch.value = pose.crouch;
@@ -108,6 +117,11 @@ export class GameRenderer {
     this.poseOverride = pose;
   }
 
+  resetCamera(state: Readonly<SkiState>): void {
+    this.cameraWorldX = state.position.x;
+    this.cameraWorldY = state.position.y + this.viewHeight * 0.19;
+  }
+
   setMarkersVisible(visible: boolean): void {
     this.markersVisible = visible;
     this.markerMesh.visible = visible;
@@ -118,7 +132,11 @@ export class GameRenderer {
   }
 
   get drawCalls(): number {
-    return this.markersVisible ? 3 : 2;
+    return this.markersVisible ? 4 : 3;
+  }
+
+  get visibleFeatureEstimate(): number {
+    return Math.round((this.viewWidth / 12) * (this.viewHeight / 12) * 0.38);
   }
 
   private readonly resize = (): void => {
@@ -129,10 +147,13 @@ export class GameRenderer {
     this.viewWidth = this.viewHeight * aspect;
     this.snowMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.markerMesh.scale.set(this.viewWidth, this.viewHeight, 1);
+    this.featureMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.snow.viewWidth.value = this.viewWidth;
     this.snow.viewHeight.value = this.viewHeight;
     this.markers.viewWidth.value = this.viewWidth;
     this.markers.viewHeight.value = this.viewHeight;
+    this.features.viewWidth.value = this.viewWidth;
+    this.features.viewHeight.value = this.viewHeight;
     this.camera.left = -this.viewWidth / 2;
     this.camera.right = this.viewWidth / 2;
     this.camera.top = this.viewHeight / 2;

@@ -6,6 +6,7 @@ export class InputManager {
   private right = false;
   private pointerActive = false;
   private pointerStartX = 0;
+  private restartRequested = false;
 
   constructor(private readonly surface: HTMLElement) {
     addEventListener('keydown', this.onKeyDown);
@@ -21,6 +22,12 @@ export class InputManager {
     removeEventListener('keyup', this.onKeyUp);
   }
 
+  consumeRestart(): boolean {
+    const requested = this.restartRequested;
+    this.restartRequested = false;
+    return requested;
+  }
+
   private updateKeyboard(): void {
     this.state.steer = Number(this.right) - Number(this.left);
   }
@@ -30,6 +37,7 @@ export class InputManager {
     if (event.code === 'ArrowRight' || event.code === 'KeyD') this.right = true;
     if (event.code === 'ArrowUp' || event.code === 'KeyW') this.state.brake = true;
     if (event.code === 'ArrowDown' || event.code === 'KeyS') this.state.tuck = true;
+    if (event.code === 'KeyR') this.restartRequested = true;
     this.updateKeyboard();
   };
 

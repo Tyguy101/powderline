@@ -28,6 +28,7 @@ Open the displayed local address. Use `?seed=424242`, `?quality=potato`, or
 - Drag horizontally: steer on pointer and touch devices
 - Press or hold near the top of the screen: brake
 - Press or hold near the bottom of the screen: speed tuck
+- `R`: restart after a crash
 - `F3`: metrics overlay
 - Development builds or `?dev=1`: `G` opens the pose inspector
 - `?dev=1&cameraTest=1`: procedural scale markers for camera evaluation
@@ -51,9 +52,11 @@ Benchmark output is written to `tools/reports/` and intentionally ignored by Git
 Implemented: repository skeleton, WebGPU initialization and compatibility handling,
 TSL procedural snow, a small pose-driven TSL skier, wide forward-looking camera,
 60 Hz fixed simulation, basic carving, braking and tuck, camera-relative rebasing,
-development pose/scale inspection, F3 metrics, deterministic tests, screenshot
-capture, and a JSON/Markdown benchmark report.
+deterministic shader-drawn trees and rocks, CPU circle collisions, crash/restart,
+replay-link serialization and playback, development pose/scale inspection, F3
+metrics, deterministic tests, screenshot capture, and a JSON/Markdown benchmark
+report.
 
-Not implemented: obstacles, collisions, clipmaps, GPU compute feature generation,
-tracks, jumping, gamepad input, scoring, dynamic quality selection, WebGL 2 fallback,
-or persistent deformation. These are later milestones.
+Not implemented: clipmaps, GPU compute feature generation, tracks, jumping, gamepad
+input, expanded scoring, dynamic quality selection, WebGL 2 fallback, or persistent
+deformation. These are later milestones.

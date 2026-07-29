@@ -39,6 +39,7 @@ export class HUD {
     metrics: Readonly<MetricsSnapshot>,
     config: GameConfig,
     drawCalls: number,
+    visibleFeatures: number,
   ): void {
     this.distance.textContent = `${Math.floor(state.position.y)} m`;
     this.speed.textContent = `${Math.round(Math.hypot(state.velocityX, state.velocityY) * 3.6)} km/h`;
@@ -51,7 +52,7 @@ AVG <em>${metrics.averageMs.toFixed(2)} ms</em>
 SIM <em>60 Hz fixed</em>
 SUBMIT <em>browser timed</em>
 DRAWS <em>${drawCalls}</em>
-FEATURES <em>0 / 0</em>
+FEATURES <em>~${visibleFeatures} visible</em>
 CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>

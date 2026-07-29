@@ -84,6 +84,26 @@ button, kbd { font: inherit; }
 .marker-toggle { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-size: 11px; font-weight: 800; }
 .marker-toggle input { accent-color: #e25b37; }
 
+.crash-overlay {
+  position: fixed; z-index: 8; inset: 0; display: none; place-items: center; padding: 24px;
+  background: rgba(13, 42, 49, .2); backdrop-filter: blur(5px);
+}
+.crash-overlay.visible { display: grid; }
+.crash-card {
+  width: min(430px, 100%); padding: 30px; border: 1px solid rgba(16,49,58,.16); border-radius: 24px;
+  background: rgba(246,252,252,.95); box-shadow: 0 26px 90px rgba(13,45,52,.25); text-align: center;
+}
+.crash-card > span { color: #db5037; font-size: 10px; font-weight: 900; letter-spacing: .2em; }
+.crash-card > strong { display: block; margin-top: 7px; font-size: 30px; letter-spacing: -.045em; }
+.crash-card p { margin: 10px 0 22px; opacity: .7; }
+.crash-card div { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; }
+.crash-card button {
+  padding: 11px 16px; border: 1px solid rgba(16,49,58,.15); border-radius: 12px;
+  background: white; color: #10313a; cursor: pointer; font-size: 12px; font-weight: 850;
+}
+.crash-card button:first-child { border-color: #db5037; background: #db5037; color: white; }
+.crash-card small { display: block; min-height: 16px; margin-top: 12px; opacity: .62; }
+
 .compatibility { display: grid; place-items: center; min-height: 100%; padding: 24px; background: radial-gradient(circle at 50% 20%, #edfafa, #a9dce7); }
 .compat-card { width: min(520px, 100%); padding: 42px; border: 1px solid rgba(16,49,58,.14); border-radius: 28px; background: rgba(255,255,255,.72); box-shadow: 0 24px 80px rgba(24,76,88,.16); }
 .eyebrow { font-size: 10px; font-weight: 900; letter-spacing: .18em; color: #d65338; }

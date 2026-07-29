@@ -80,6 +80,10 @@ export function resolveSkierPose(
     return;
   }
   const speed = Math.hypot(state.velocityX, state.velocityY);
+  if (state.crashed) {
+    writePreset(target, 'crash');
+    return;
+  }
   if (speed < 5.2) {
     writePreset(target, 'idle');
     return;
