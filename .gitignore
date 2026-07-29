@@ -1,5 +1,11 @@
 node_modules/
 dist/
+.vercel/
+.vite/
+.env
+.env.*
+!.env.example
+coverage/
 tools/reports/*
 !tools/reports/.gitkeep
 playwright-report/

@@ -52,6 +52,7 @@ button, kbd { font: inherit; }
   font-size: 9px; font-weight: 900; letter-spacing: .13em; opacity: .62;
 }
 .status-chip i { width: 7px; height: 7px; border-radius: 50%; background: #16a37d; box-shadow: 0 0 0 4px rgba(22,163,125,.12); }
+.status-chip span { opacity: .72; }
 
 .debug {
   position: fixed; z-index: 4; top: 78px; right: 28px; display: none; white-space: pre-line;

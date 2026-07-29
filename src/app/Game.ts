@@ -9,6 +9,7 @@ import { ReplaySystem } from '../simulation/ReplaySystem';
 import { CrashOverlay } from '../ui/CrashOverlay';
 import { HUD } from '../ui/HUD';
 import { PoseGallery } from '../ui/PoseGallery';
+import { BUILD_ID } from './build';
 import type { GameConfig } from './config';
 
 export class Game {
@@ -104,6 +105,7 @@ export class Game {
       worldY: state.position.y,
       seed: this.config.seed,
       quality: this.config.quality,
+      build: BUILD_ID,
     };
   }
 }

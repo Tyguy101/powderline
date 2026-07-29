@@ -1,6 +1,7 @@
 import type { MetricsSnapshot } from '../instrumentation/FrameMetrics';
 import type { SkiState } from '../simulation/SkiPhysics';
 import type { GameConfig } from '../app/config';
+import { BUILD_ID } from '../app/build';
 
 export class HUD {
   private readonly distance: HTMLElement;
@@ -20,7 +21,7 @@ export class HUD {
       </header>
       <div class="hint"><kbd>A</kbd><kbd>D</kbd> carve <span>•</span> <kbd>W</kbd> brake <span>•</span> <kbd>S</kbd> tuck <span>•</span> drag in 8 directions${config.developmentMode ? ' <span>•</span> <kbd>G</kbd> poses' : ''}</div>
       <aside id="debug" class="debug" aria-live="polite"></aside>
-      <div class="status-chip"><i></i> WEBGPU PROCEDURAL</div>`,
+      <div class="status-chip"><i></i> WEBGPU PROCEDURAL <span>BUILD ${BUILD_ID}</span></div>`,
     );
     this.distance = root.querySelector('#distance')!;
     this.speed = root.querySelector('#speed')!;
@@ -58,5 +59,6 @@ RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>
 WORLD <em>${state.position.x.toFixed(1)}, ${state.position.y.toFixed(1)}</em>
 SEED <em>${config.seed}</em>`;
+    this.debug.dataset.build = BUILD_ID;
   }
 }

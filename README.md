@@ -16,8 +16,36 @@ npm install
 npm run dev
 ```
 
-Open the displayed local address. Use `?seed=424242`, `?quality=potato`, or
-`?debug=1` to configure a run.
+Vite binds to `0.0.0.0:5173` and prints both URLs:
+
+- Local: `http://localhost:5173/`
+- LAN: `http://<this-computer-ip>:5173/`
+
+Hot reload works at both addresses. If Windows asks, allow Node.js on **Private
+networks** only. See [DEPLOYMENT.md](./DEPLOYMENT.md) for Windows Firewall,
+LAN WebGPU, and local HTTPS details.
+
+WebGPU requires a secure context. `http://localhost:5173` is treated as secure
+on the same computer, but a phone opening `http://<LAN-IP>:5173` will normally
+not receive WebGPU. For local HTTPS:
+
+```bash
+npm run dev:https
+```
+
+The generated certificate is self-signed and must be trusted on each test
+device. Production is served over trusted HTTPS.
+
+Use `?seed=424242`, `?quality=potato`, or `?debug=1` to configure a run.
+
+## Production
+
+Powderline is a static Vite application prepared for one persistent Vercel
+project named `powderline`. The stable production URL will be recorded here
+after the Vercel project is linked.
+
+See [DEPLOYMENT.md](./DEPLOYMENT.md) for the GitHub/Vercel workflow. Temporary
+Cloudflare Workers are no longer part of development or deployment.
 
 ## Controls
 
@@ -46,6 +74,8 @@ npm run report
 ```
 
 Benchmark output is written to `tools/reports/` and intentionally ignored by Git.
+
+The bottom-left status chip includes the eight-character Git build identifier.
 
 ## Status
 
