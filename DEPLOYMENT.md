@@ -65,6 +65,9 @@ replace the last successful production deployment.
 Use one GitHub repository and one persistent Vercel project named
 `powderline`.
 
+- GitHub: [Tyguy101/powderline](https://github.com/Tyguy101/powderline)
+- Stable production: [powderline-lake.vercel.app](https://powderline-lake.vercel.app)
+
 1. Connect the GitHub repository to the Vercel project once.
 2. Configure `main` as the production branch.
 3. Pushes to `main` build and update the stable production domain.

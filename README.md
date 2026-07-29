@@ -41,8 +41,9 @@ Use `?seed=424242`, `?quality=potato`, or `?debug=1` to configure a run.
 ## Production
 
 Powderline is a static Vite application prepared for one persistent Vercel
-project named `powderline`. The stable production URL will be recorded here
-after the Vercel project is linked.
+project named `powderline`.
+
+**Stable production:** [https://powderline-lake.vercel.app](https://powderline-lake.vercel.app)
 
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for the GitHub/Vercel workflow. Temporary
 Cloudflare Workers are no longer part of development or deployment.
