@@ -1,7 +1,7 @@
 import type { InputState } from '../input/InputState';
 
 // Increment whenever authoritative fixed-step physics changes.
-const REPLAY_VERSION = 3;
+const REPLAY_VERSION = 4;
 
 interface ReplayRun {
   frames: number;

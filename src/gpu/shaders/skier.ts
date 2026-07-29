@@ -54,6 +54,7 @@ export interface SkierShader {
   readonly skiLift: ReturnType<typeof uniform>;
   readonly armSpread: ReturnType<typeof uniform>;
   readonly slideTrail: ReturnType<typeof uniform>;
+  readonly slideSpray: ReturnType<typeof uniform>;
 }
 
 export function createSkierShader(): SkierShader {
@@ -77,6 +78,7 @@ export function createSkierShader(): SkierShader {
   const skiLift = uniform(0);
   const armSpread = uniform(0);
   const slideTrail = uniform(0);
+  const slideSpray = uniform(0);
   const point = uv().sub(0.5);
   const bodyX = lean.mul(0.085).add(traverse.mul(0.025));
   const bodyY = float(0.075).sub(crouch.mul(0.075)).add(air.mul(0.07));
@@ -110,8 +112,8 @@ export function createSkierShader(): SkierShader {
     bodyX.add(0.075).sub(outsideExtension).add(wedge.mul(0.06)),
     bodyY.sub(float(0.235).sub(lean.mul(0.025))).add(air.mul(0.015)),
   );
-  leftBoot = mix(leftBoot, vec2(-0.085, float(0.19).add(skiLift.mul(0.11))), facePlant);
-  rightBoot = mix(rightBoot, vec2(0.085, float(0.19).add(skiLift.mul(0.11))), facePlant);
+  leftBoot = mix(leftBoot, vec2(-0.17, float(0.2).add(skiLift.mul(0.12))), facePlant);
+  rightBoot = mix(rightBoot, vec2(0.055, float(0.16).add(skiLift.mul(0.08))), facePlant);
   leftBoot = mix(leftBoot, vec2(-0.27, -0.095), treeStick);
   rightBoot = mix(rightBoot, vec2(0.27, -0.095), treeStick);
   leftBoot = mix(leftBoot, vec2(-0.2, -0.055), sideWipeout);
@@ -126,8 +128,8 @@ export function createSkierShader(): SkierShader {
     mix(bodyX.add(0.045), rightBoot.x, 0.55).sub(lean.mul(0.025)),
     mix(hip.y, rightBoot.y, 0.5).add(crouch.mul(0.035)),
   );
-  leftKnee = mix(leftKnee, vec2(-0.07, 0.09), facePlant);
-  rightKnee = mix(rightKnee, vec2(0.07, 0.09), facePlant);
+  leftKnee = mix(leftKnee, vec2(-0.085, 0.085), facePlant);
+  rightKnee = mix(rightKnee, vec2(0.105, 0.07), facePlant);
   leftKnee = mix(leftKnee, vec2(-0.14, -0.055), treeStick);
   rightKnee = mix(rightKnee, vec2(0.14, -0.055), treeStick);
   leftKnee = mix(leftKnee, vec2(-0.1, 0.015), sideWipeout);
@@ -166,6 +168,11 @@ export function createSkierShader(): SkierShader {
   leftSkiEnd = mix(leftSkiEnd, vec2(-0.2, 0.1), treeStick);
   rightSkiStart = mix(rightSkiStart, vec2(0.31, -0.1), treeStick);
   rightSkiEnd = mix(rightSkiEnd, vec2(0.2, 0.1), treeStick);
+  // Face-plants finish with one leg kicked out and the skis crossed in the air.
+  leftSkiStart = mix(leftSkiStart, vec2(-0.29, 0.37), facePlant);
+  leftSkiEnd = mix(leftSkiEnd, vec2(0.07, 0.08), facePlant);
+  rightSkiStart = mix(rightSkiStart, vec2(0.15, 0.34), facePlant);
+  rightSkiEnd = mix(rightSkiEnd, vec2(-0.08, 0.055), facePlant);
 
   const shoulderLeft = vec2(neck.x.sub(0.075), neck.y.sub(0.04));
   const shoulderRight = vec2(neck.x.add(0.075), neck.y.sub(0.04));
@@ -216,7 +223,12 @@ export function createSkierShader(): SkierShader {
   const sprayLeft = ellipse(point, leftSkiEnd.add(vec2(-0.035, 0.02)), vec2(0.13, 0.07));
   const sprayRight = ellipse(point, rightSkiEnd.add(vec2(0.035, 0.02)), vec2(0.13, 0.07));
   const crashCloud = ellipse(point, vec2(0, -0.08), vec2(0.34, 0.19)).mul(snowBurst);
-  const sprayMask = max(max(sprayLeft, sprayRight).mul(spray).mul(float(1).sub(air)), crashCloud);
+  const slideCloudLeft = ellipse(point, vec2(-0.25, 0.03), vec2(0.22, 0.12)).mul(slideSpray);
+  const slideCloudRight = ellipse(point, vec2(0.25, 0.08), vec2(0.2, 0.1)).mul(slideSpray);
+  const sprayMask = max(
+    max(max(sprayLeft, sprayRight).mul(spray).mul(float(1).sub(air)), crashCloud),
+    max(slideCloudLeft, slideCloudRight),
+  );
   const slideGroove = capsule(point, vec2(0, 0.02), vec2(0, 0.48), 0.055).mul(slideTrail);
   const slideRidgeLeft = capsule(point, vec2(-0.075, 0.04), vec2(-0.1, 0.45), 0.022).mul(slideTrail);
   const slideRidgeRight = capsule(point, vec2(0.075, 0.04), vec2(0.1, 0.45), 0.022).mul(slideTrail);
@@ -302,5 +314,6 @@ export function createSkierShader(): SkierShader {
     skiLift,
     armSpread,
     slideTrail,
+    slideSpray,
   };
 }

@@ -200,6 +200,9 @@ export class Game {
       seed: this.config.seed,
       quality: this.config.quality,
       build: BUILD_ID,
+      crashed: String(state.crashed),
+      crashFamily: state.crashed ? state.crash.family : 'none',
+      drawCalls: this.renderer.drawCalls,
     };
   }
 }

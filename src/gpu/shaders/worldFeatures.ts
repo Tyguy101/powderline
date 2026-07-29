@@ -95,7 +95,7 @@ export function createWorldFeatureShader(seed: number): WorldFeatureShader {
   const rockChoice = step(0.62, choice).mul(float(1).sub(step(0.78, choice))).mul(spawnSafe);
 
   const treeShadow = ellipse(q.sub(vec2(0.045, 0.115)), vec2(0.14, 0.055));
-  const treeTrunk = box(q.sub(vec2(0, 0.075)), vec2(0.018, 0.1));
+  const treeTrunk = box(q.sub(vec2(0, 0.025)), vec2(0.034, 0.19));
   const treeLower = pineTier(q, 0.015, 0.13, 0.17);
   const treeMiddle = pineTier(q, -0.07, 0.105, 0.15);
   const treeUpper = pineTier(q, -0.145, 0.075, 0.125);

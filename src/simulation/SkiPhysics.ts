@@ -37,6 +37,8 @@ export class SkiPhysics {
   private crashVelocityY = 0;
   private crashSpin = 0;
   private crashReaction: CrashReaction | null = null;
+  private crashAnchorX = 0;
+  private crashAnchorY = 0;
   private collisionCooldown = 0;
 
   step(delta: number, input: Readonly<InputState>): void {
@@ -113,6 +115,8 @@ export class SkiPhysics {
     state.crash.normalY = context.normalY;
     state.crash.impactStrength = reaction.strength;
     this.crashReaction = reaction;
+    this.crashAnchorX = context.contactX - context.normalX * context.obstacleRadius;
+    this.crashAnchorY = context.contactY - context.normalY * context.obstacleRadius;
     const tangentX = -context.normalY;
     const tangentY = context.normalX;
     const tangentSpeed = context.velocityX * tangentX + context.velocityY * tangentY;
@@ -192,6 +196,8 @@ export class SkiPhysics {
     this.crashVelocityY = 0;
     this.crashSpin = 0;
     this.crashReaction = null;
+    this.crashAnchorX = 0;
+    this.crashAnchorY = 0;
     this.collisionCooldown = 0;
   }
 
@@ -219,7 +225,13 @@ export class SkiPhysics {
     }
 
     const moving = crash.phase !== 'rest';
-    if (moving) {
+    if (reaction.family === 'obstacle-slam' && crash.phase === 'impact') {
+      const anchorBlend = 1 - Math.exp(-18 * delta);
+      state.position.x += (this.crashAnchorX - state.position.x) * anchorBlend;
+      state.position.y += (this.crashAnchorY - state.position.y) * anchorBlend;
+      this.crashVelocityX *= Math.exp(-7 * delta);
+      this.crashVelocityY *= Math.exp(-7 * delta);
+    } else if (moving) {
       state.position.x += this.crashVelocityX * delta;
       state.position.y += this.crashVelocityY * delta;
       const drag = Math.exp(-(crash.phase === 'follow-through' ? 2.2 : 1.1) * delta);
@@ -281,12 +293,14 @@ export class SkiPhysics {
     crash.sideWipeout =
       reaction.family === 'side-spin'
         ? Math.min(1, impactBlend) * (1 - settleBlend * 0.25)
+        : reaction.family === 'rolling-tumble'
+          ? settleBlend * 0.82
         : reaction.family === 'obstacle-slam' && crash.phase !== 'impact'
           ? Math.min(1, crash.progress * 1.5)
           : 0;
     crash.tumbleCurl =
       reaction.family === 'rolling-tumble'
-        ? 0.5 + Math.sin(crash.rotation * 1.35) * 0.5
+        ? (0.5 + Math.sin(crash.rotation * 1.35) * 0.5) * (1 - settleBlend * 0.78)
         : 0;
     crash.skiLift =
       reaction.family === 'face-plant'
