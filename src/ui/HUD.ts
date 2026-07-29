@@ -18,7 +18,7 @@ export class HUD {
           <div><span class="label">SPEED</span><strong id="speed">0 km/h</strong></div>
         </div>
       </header>
-      <div class="hint"><kbd>A</kbd><kbd>D</kbd> carve <span>•</span> <kbd>W</kbd> brake <span>•</span> <kbd>S</kbd> tuck <span>•</span> drag to steer${config.developmentMode ? ' <span>•</span> <kbd>G</kbd> poses' : ''}</div>
+      <div class="hint"><kbd>A</kbd><kbd>D</kbd> carve <span>•</span> <kbd>W</kbd> brake <span>•</span> <kbd>S</kbd> tuck <span>•</span> drag in 8 directions${config.developmentMode ? ' <span>•</span> <kbd>G</kbd> poses' : ''}</div>
       <aside id="debug" class="debug" aria-live="polite"></aside>
       <div class="status-chip"><i></i> WEBGPU PROCEDURAL</div>`,
     );

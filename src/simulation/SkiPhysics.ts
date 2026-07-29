@@ -7,6 +7,7 @@ export interface SkiState {
   velocityY: number;
   facing: number;
   carve: number;
+  steeringHold: number;
   crashed: boolean;
 }
 
@@ -17,6 +18,7 @@ export class SkiPhysics {
     velocityY: 12,
     facing: 0,
     carve: 0,
+    steeringHold: 0,
     crashed: false,
   };
 
@@ -25,15 +27,30 @@ export class SkiPhysics {
     if (state.crashed) return;
     const targetCarve = input.steer;
     state.carve += (targetCarve - state.carve) * Math.min(1, delta * 7);
-    const speed = Math.hypot(state.velocityX, state.velocityY);
-    const steeringForce = 17 / (1 + speed * 0.018);
+    const inputDirection = Math.sign(targetCarve);
+    const heldDirection = Math.sign(state.steeringHold);
+    if (Math.abs(targetCarve) > 0.08) {
+      const heldSeconds = inputDirection === heldDirection ? Math.abs(state.steeringHold) : 0;
+      state.steeringHold = inputDirection * Math.min(1.6, heldSeconds + delta);
+    } else {
+      state.steeringHold *= Math.exp(-5 * delta);
+    }
+    const holdStrength = Math.min(1, Math.abs(state.steeringHold) / 1.35);
+    const edgeEngagement = 1 + holdStrength * 1.25;
+    const stanceTurning = input.brake ? 1.55 : input.tuck ? 0.58 : 1;
+    const steeringForce =
+      (20 / (1 + state.velocityY * 0.014)) * edgeEngagement * stanceTurning;
     state.velocityX += state.carve * steeringForce * delta;
-    state.velocityX *= Math.exp(-1.65 * delta);
-    state.velocityY += 8.4 * delta;
-    if (input.tuck) state.velocityY += 4.8 * delta;
-    const traverseDrag = 1 + Math.abs(state.carve) * 0.38;
-    state.velocityY *= Math.exp(-0.22 * traverseDrag * delta);
-    if (input.brake) state.velocityY *= Math.exp(-2.4 * delta);
+    state.velocityX *= Math.exp(-1.48 * delta);
+    const lateralLimit = input.brake ? 10 : input.tuck ? 11 : 22;
+    state.velocityX = Math.max(-lateralLimit, Math.min(lateralLimit, state.velocityX));
+
+    const baseTargetSpeed = input.brake ? 7 : input.tuck ? 34 : 22;
+    const traversePenalty = Math.abs(state.carve) * (input.tuck ? 0.1 : 0.22);
+    const targetSpeed = baseTargetSpeed * (1 - traversePenalty);
+    const speedResponse = input.brake ? 4.8 : input.tuck ? 0.95 : 1.15;
+    state.velocityY +=
+      (targetSpeed - state.velocityY) * (1 - Math.exp(-speedResponse * delta));
     state.velocityY = Math.max(4, Math.min(34, state.velocityY));
     state.position.x += state.velocityX * delta;
     state.position.y += state.velocityY * delta;
@@ -45,6 +62,7 @@ export class SkiPhysics {
     this.state.velocityX = 0;
     this.state.velocityY = 0;
     this.state.carve = 0;
+    this.state.steeringHold = 0;
   }
 
   reset(): void {
@@ -54,6 +72,7 @@ export class SkiPhysics {
     this.state.velocityY = 12;
     this.state.facing = 0;
     this.state.carve = 0;
+    this.state.steeringHold = 0;
     this.state.crashed = false;
   }
 }

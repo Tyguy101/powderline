@@ -25,6 +25,28 @@ describe('ski physics', () => {
     }
     expect(tucked.state.position.y).toBeGreaterThan(neutral.state.position.y);
     expect(braking.state.position.y).toBeLessThan(neutral.state.position.y);
+    expect(neutral.state.velocityY).toBeGreaterThan(20.5);
+    expect(neutral.state.velocityY).toBeLessThan(22);
+    expect(tucked.state.velocityY).toBeGreaterThan(neutral.state.velocityY);
+    expect(braking.state.velocityY).toBeLessThan(8);
+  });
+
+  it('builds stronger lateral authority during a sustained carve', () => {
+    const standing = new SkiPhysics();
+    const tucked = new SkiPhysics();
+    const braking = new SkiPhysics();
+    for (let index = 0; index < 240; index += 1) {
+      standing.step(1 / 60, { steer: 1, brake: false, tuck: false });
+      tucked.step(1 / 60, { steer: 1, brake: false, tuck: true });
+      braking.step(1 / 60, { steer: 1, brake: true, tuck: false });
+    }
+    expect(standing.state.steeringHold).toBeCloseTo(1.6);
+    expect(standing.state.position.x).toBeGreaterThan(45);
+    expect(Math.abs(tucked.state.position.x)).toBeLessThan(
+      Math.abs(standing.state.position.x),
+    );
+    expect(braking.state.velocityX).toBeLessThanOrEqual(10);
+    expect(braking.state.velocityY).toBeLessThan(6);
   });
 
   it('stops on crash and resets to the deterministic spawn state', () => {

@@ -92,7 +92,7 @@ export function resolveSkierPose(
     writePreset(target, 'brake');
     return;
   }
-  if (input.tuck || speed > 30) {
+  if (input.tuck) {
     writePreset(target, 'tuck');
     return;
   }

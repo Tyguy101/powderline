@@ -25,9 +25,9 @@ Open the displayed local address. Use `?seed=424242`, `?quality=potato`, or
 - `D` / Right Arrow: carve right
 - `W` / Up Arrow: brake
 - `S` / Down Arrow: speed tuck
-- Drag horizontally: steer on pointer and touch devices
-- Press or hold near the top of the screen: brake
-- Press or hold near the bottom of the screen: speed tuck
+- Drag horizontally: farther displacement produces a sharper carve
+- Drag upward: brake; combine with left/right for a braking turn
+- Drag downward: speed tuck; combine with left/right for a slower tuck turn
 - `R`: restart after a crash
 - `F3`: metrics overlay
 - Development builds or `?dev=1`: `G` opens the pose inspector
