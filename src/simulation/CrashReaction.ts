@@ -8,7 +8,7 @@ export type CollisionOutcome = 'minor' | 'stumble' | 'crash';
 export interface ImpactContext {
   seed: number;
   obstacleId: number;
-  obstacleType: Exclude<FeatureType, 'none'>;
+  obstacleType: Extract<FeatureType, 'tree' | 'rock'>;
   obstacleRadius: number;
   speed: number;
   velocityX: number;

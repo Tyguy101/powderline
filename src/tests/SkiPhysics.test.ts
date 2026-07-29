@@ -65,4 +65,25 @@ describe('ski physics', () => {
       crashed: false,
     });
   });
+
+  it('uses momentum for a guaranteed jump and slows by twenty percent on landing', () => {
+    const physics = new SkiPhysics();
+    physics.state.velocityY = 25;
+    physics.state.velocityX = 4;
+    const launchY = physics.state.velocityY;
+    const launchX = physics.state.velocityX;
+    physics.beginJump();
+    let peak = 0;
+    for (let frame = 0; frame < 300 && physics.state.airborne; frame += 1) {
+      physics.step(1 / 60, { steer: 0.35, brake: false, tuck: false });
+      peak = Math.max(peak, physics.state.airborneHeight);
+    }
+    expect(peak).toBeGreaterThan(3);
+    expect(physics.state.airborne).toBe(false);
+    expect(physics.state.airborneHeight).toBe(0);
+    expect(physics.state.jump.completedDistance).toBeGreaterThan(25);
+    expect(physics.state.velocityY).toBeCloseTo(launchY * 0.8);
+    expect(physics.state.velocityX).toBeGreaterThan(launchX * 0.8);
+    expect(physics.state.landingAmount).toBe(1);
+  });
 });

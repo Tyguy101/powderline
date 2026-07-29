@@ -39,4 +39,17 @@ describe('deterministic CPU features', () => {
     expect(found).not.toBeNull();
     expect(generator.findCollision(found!.x, found!.y, 0.62, candidate)).toEqual(found);
   });
+
+  it('places deterministic red-ramp launch features outside the spawn corridor', () => {
+    let ramp: FeatureDescriptor | null = null;
+    for (let cellY = 9; cellY < 90 && !ramp; cellY += 1) {
+      for (let cellX = -12; cellX <= 12 && !ramp; cellX += 1) {
+        const descriptor = describeFeature(424242, cellX, cellY, feature());
+        if (descriptor.type === 'ramp') ramp = { ...descriptor };
+      }
+    }
+    expect(ramp?.type).toBe('ramp');
+    expect(ramp!.radius).toBeGreaterThan(0.5);
+    expect(ramp!.y).toBeGreaterThan(100);
+  });
 });

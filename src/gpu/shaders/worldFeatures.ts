@@ -93,6 +93,9 @@ export function createWorldFeatureShader(seed: number): WorldFeatureShader {
   const spawnSafe = step(30, centerY).mul(max(step(100, centerY), step(6, abs(centerX))));
   const treeChoice = step(0.78, choice).mul(spawnSafe);
   const rockChoice = step(0.62, choice).mul(float(1).sub(step(0.78, choice))).mul(spawnSafe);
+  const rampChoice = step(0.585, choice)
+    .mul(float(1).sub(step(0.62, choice)))
+    .mul(spawnSafe);
 
   const treeShadow = ellipse(q.sub(vec2(0.045, 0.115)), vec2(0.14, 0.055));
   const treeTrunk = box(q.sub(vec2(0, 0.025)), vec2(0.034, 0.19));
@@ -107,7 +110,15 @@ export function createWorldFeatureShader(seed: number): WorldFeatureShader {
   const rockFacet = ellipse(q.sub(vec2(-0.028, -0.012)), vec2(0.065, 0.045)).mul(rockChoice);
   const rockSnow = ellipse(q.sub(vec2(-0.018, -0.038)), vec2(0.077, 0.032)).mul(rockChoice);
 
-  const shadow = max(treeShadow.mul(treeChoice), rockShadow.mul(rockChoice));
+  const rampShadow = ellipse(q.sub(vec2(0.035, 0.045)), vec2(0.13, 0.052));
+  const rampBody = box(q, vec2(0.105, 0.055)).mul(rampChoice);
+  const rampLip = box(q.sub(vec2(0, -0.042)), vec2(0.112, 0.014)).mul(rampChoice);
+  const rampStripe = box(q, vec2(0.018, 0.058)).mul(rampChoice);
+
+  const shadow = max(
+    max(treeShadow.mul(treeChoice), rockShadow.mul(rockChoice)),
+    rampShadow.mul(rampChoice),
+  );
   let color: Node<'vec3'> = vec3(0.14, 0.3, 0.34);
   color = mix(color, vec3(0.1, 0.24, 0.27), shadow.mul(0.28));
   color = mix(color, vec3(0.26, 0.22, 0.17), treeTrunk.mul(treeChoice));
@@ -115,9 +126,12 @@ export function createWorldFeatureShader(seed: number): WorldFeatureShader {
   color = mix(color, vec3(0.55, 0.67, 0.68), rockBody);
   color = mix(color, vec3(0.38, 0.5, 0.52), rockFacet);
   color = mix(color, vec3(0.94, 0.99, 1), max(treeSnow.mul(treeChoice), rockSnow));
-  const body = max(treeBody, rockBody);
+  color = mix(color, vec3(0.78, 0.09, 0.08), rampBody);
+  color = mix(color, vec3(0.98, 0.27, 0.18), rampLip);
+  color = mix(color, vec3(0.98, 0.84, 0.65), rampStripe);
+  const body = max(max(treeBody, rockBody), rampBody);
   const highlight = max(treeSnow.mul(treeChoice), rockSnow);
-  const alpha = max(shadow.mul(0.25), max(body, highlight));
+  const alpha = max(shadow.mul(0.25), max(max(body, highlight), max(rampLip, rampStripe)));
 
   const material = new MeshBasicNodeMaterial();
   material.colorNode = color;

@@ -84,6 +84,30 @@ export function resolveSkierPose(
     writePreset(target, 'crash');
     return;
   }
+  if (state.airborne || state.airborneAmount > 0.01) {
+    const air = Math.max(0, Math.min(1, state.airborneAmount));
+    const lateralRatio = Math.max(
+      -1,
+      Math.min(1, state.velocityX / Math.max(5, state.velocityY) * 3),
+    );
+    Object.assign(target, BASE_POSE);
+    target.lean = state.carve * 0.24 * (1 - air);
+    target.traverse = lateralRatio * (1 - air * 0.45);
+    target.crouch = 0.12 + air * 0.2;
+    target.air = air;
+    target.spray = 0;
+    return;
+  }
+  if (state.landingAmount > 0.01) {
+    const landing = Math.max(0, Math.min(1, state.landingAmount));
+    Object.assign(target, BASE_POSE);
+    target.lean = state.carve * 0.35;
+    target.traverse = Math.max(-1, Math.min(1, state.velocityX / Math.max(5, state.velocityY) * 2));
+    target.crouch = 0.12 + landing * 0.7;
+    target.landing = landing;
+    target.spray = 0.08 + landing * 0.62;
+    return;
+  }
   if (speed < 5.2) {
     writePreset(target, 'idle');
     return;

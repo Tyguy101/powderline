@@ -3,7 +3,7 @@ import { hashCoordinates } from '../core/SeededHash';
 export const FEATURE_CELL_SIZE = 12;
 export const FEATURE_MAX_RADIUS = 1.35;
 
-export type FeatureType = 'none' | 'tree' | 'rock';
+export type FeatureType = 'none' | 'tree' | 'rock' | 'ramp';
 
 export interface FeatureDescriptor {
   id: number;
@@ -58,6 +58,8 @@ export function describeFeature(
       ? 'tree'
       : choice >= 0.62
         ? 'rock'
+        : choice >= 0.585
+          ? 'ramp'
         : 'none';
 
   target.id = hashCoordinates(seed, cellX, cellY, 5);
@@ -65,7 +67,14 @@ export function describeFeature(
   target.x = x;
   target.y = y;
   target.scale = scale;
-  target.radius = type === 'tree' ? 1.05 * scale : type === 'rock' ? 0.88 * scale : 0;
+  target.radius =
+    type === 'tree'
+      ? 1.05 * scale
+      : type === 'rock'
+        ? 0.88 * scale
+        : type === 'ramp'
+          ? 0.72 * scale
+          : 0;
   return target;
 }
 

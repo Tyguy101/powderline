@@ -92,6 +92,12 @@ F3 metrics, deterministic tests, crash-sequence capture, and JSON/Markdown
 benchmark reports. Crash selection uses speed, collision normal, contact offset,
 obstacle parameters, carve state, and controlled hash variation.
 
+The procedural feature field also includes small red launch ramps. Ramp takeoff
+preserves the skier's velocity, derives height and distance from launch speed,
+allows reduced steering in the air, blends through a ski-jumper pose and landing
+compression, and records launch speed, airtime, and completed distance for future
+trick and distance scoring.
+
 Not implemented: clipmaps, GPU compute feature generation, tracks, jumping, gamepad
 input, expanded scoring, dynamic quality selection, WebGL 2 fallback, or persistent
 deformation. These are later milestones.

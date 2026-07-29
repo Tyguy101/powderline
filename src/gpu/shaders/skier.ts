@@ -88,6 +88,9 @@ export function createSkierShader(): SkierShader {
     bodyX.add(lean.mul(0.075)),
     bodyY.add(float(0.245).sub(crouch.mul(0.075))),
   );
+  hip = mix(hip, vec2(bodyX, -0.015), air);
+  neck = mix(neck, vec2(bodyX, 0.045), air);
+  headCenter = mix(headCenter, vec2(bodyX, 0.105), air);
   // Authored crash silhouettes. Sequential mixes let impact families blend
   // smoothly from the exact skiing pose present on the collision frame.
   hip = mix(hip, vec2(0, 0.045), facePlant);
@@ -159,6 +162,10 @@ export function createSkierShader(): SkierShader {
     rightBoot.x.sub(skiDrift.mul(0.48)).add(wedge.mul(0.07)).sub(air.mul(0.055)),
     rightBoot.y.add(skiRise.mul(0.56)),
   );
+  leftSkiStart = mix(leftSkiStart, vec2(-0.15, -0.32), air);
+  leftSkiEnd = mix(leftSkiEnd, vec2(-0.045, 0.29), air);
+  rightSkiStart = mix(rightSkiStart, vec2(0.15, -0.32), air);
+  rightSkiEnd = mix(rightSkiEnd, vec2(0.045, 0.29), air);
   const spread = equipmentSpread.mul(0.18);
   leftSkiStart = mix(leftSkiStart, vec2(leftBoot.x.sub(0.03), leftBoot.y.sub(0.2)), crash);
   leftSkiEnd = mix(leftSkiEnd, vec2(leftBoot.x.add(spread.mul(-0.4)), leftBoot.y.add(0.18)), crash);
@@ -199,6 +206,8 @@ export function createSkierShader(): SkierShader {
       .add(landing.mul(0.055))
       .add(air.mul(0.055)),
   );
+  leftHand = mix(leftHand, vec2(bodyX.sub(0.16), bodyY.add(0.1)), air);
+  rightHand = mix(rightHand, vec2(bodyX.add(0.16), bodyY.add(0.1)), air);
   leftHand = mix(leftHand, vec2(float(-0.22).sub(armSpread.mul(0.1)), -0.04), crash);
   rightHand = mix(rightHand, vec2(float(0.22).add(armSpread.mul(0.1)), -0.04), crash);
   leftHand = mix(leftHand, vec2(-0.34, 0.085), treeStick);

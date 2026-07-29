@@ -62,6 +62,9 @@ export class Game {
       );
     }
     this.origin = new CameraRelativeOrigin(config.rebaseDistance);
+    globalThis.__POWDERLINE_TRIGGER_JUMP__ = config.developmentMode
+      ? () => this.physics.beginJump()
+      : undefined;
     this.loop = new FixedStepLoop(
       config.fixedStepSeconds,
       config.maxFrameSeconds,
@@ -72,33 +75,41 @@ export class Game {
             ? this.input.state
             : this.replay.sample(this.input.state);
           this.physics.step(delta, replayInput);
-          if (!this.physics.state.crashed && this.physics.canCollide()) {
+          if (
+            !this.physics.state.crashed &&
+            !this.physics.state.airborne &&
+            this.physics.canCollide()
+          ) {
             const hit = this.collision.query(this.physics.state);
             if (hit && hit.feature.type !== 'none') {
               const state = this.physics.state;
-              const context: ImpactContext = {
-                seed: this.config.seed,
-                obstacleId: hit.feature.id,
-                obstacleType: hit.feature.type,
-                obstacleRadius: hit.feature.radius,
-                speed: Math.hypot(state.velocityX, state.velocityY),
-                velocityX: state.velocityX,
-                velocityY: state.velocityY,
-                facing: state.facing,
-                carve: state.carve,
-                airborneHeight: state.airborneHeight,
-                normalX: hit.normalX,
-                normalY: hit.normalY,
-                contactX: hit.contactX,
-                contactY: hit.contactY,
-                contactOffset: hit.contactOffset,
-              };
-              const reaction = selectCrashReaction(context);
-              this.renderer.setImpactDebug(context, reaction, this.config.developmentMode);
-              if (reaction.outcome === 'crash') {
-                this.physics.beginCrash(context, reaction);
+              if (hit.feature.type === 'ramp') {
+                this.physics.beginJump();
               } else {
-                this.physics.applyMinorImpact(context, reaction);
+                const context: ImpactContext = {
+                  seed: this.config.seed,
+                  obstacleId: hit.feature.id,
+                  obstacleType: hit.feature.type,
+                  obstacleRadius: hit.feature.radius,
+                  speed: Math.hypot(state.velocityX, state.velocityY),
+                  velocityX: state.velocityX,
+                  velocityY: state.velocityY,
+                  facing: state.facing,
+                  carve: state.carve,
+                  airborneHeight: state.airborneHeight,
+                  normalX: hit.normalX,
+                  normalY: hit.normalY,
+                  contactX: hit.contactX,
+                  contactY: hit.contactY,
+                  contactOffset: hit.contactOffset,
+                };
+                const reaction = selectCrashReaction(context);
+                this.renderer.setImpactDebug(context, reaction, this.config.developmentMode);
+                if (reaction.outcome === 'crash') {
+                  this.physics.beginCrash(context, reaction);
+                } else {
+                  this.physics.applyMinorImpact(context, reaction);
+                }
               }
             }
           }
@@ -203,10 +214,15 @@ export class Game {
       crashed: String(state.crashed),
       crashFamily: state.crashed ? state.crash.family : 'none',
       drawCalls: this.renderer.drawCalls,
+      airborne: String(state.airborne),
+      jumpHeight: state.airborneHeight,
+      jumpDistance: state.jump.distance,
+      completedJumpDistance: state.jump.completedDistance,
     };
   }
 }
 
 declare global {
   var __POWDERLINE_METRICS__: Record<string, number | string> | undefined;
+  var __POWDERLINE_TRIGGER_JUMP__: (() => void) | undefined;
 }

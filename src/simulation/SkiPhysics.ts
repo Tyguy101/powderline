@@ -17,7 +17,20 @@ export interface SkiState {
   crashed: boolean;
   wobble: number;
   airborneHeight: number;
+  airborne: boolean;
+  airborneAmount: number;
+  landingAmount: number;
+  readonly jump: JumpState;
   readonly crash: CrashVisualState;
+}
+
+export interface JumpState {
+  verticalVelocity: number;
+  launchSpeed: number;
+  airtime: number;
+  distance: number;
+  completedDistance: number;
+  sequence: number;
 }
 
 export class SkiPhysics {
@@ -31,6 +44,17 @@ export class SkiPhysics {
     crashed: false,
     wobble: 0,
     airborneHeight: 0,
+    airborne: false,
+    airborneAmount: 0,
+    landingAmount: 0,
+    jump: {
+      verticalVelocity: 0,
+      launchSpeed: 0,
+      airtime: 0,
+      distance: 0,
+      completedDistance: 0,
+      sequence: 0,
+    },
     crash: createCrashVisualState(),
   };
   private crashVelocityX = 0;
@@ -48,7 +72,13 @@ export class SkiPhysics {
       this.stepCrash(delta);
       return;
     }
+    if (state.airborne) {
+      this.stepAirborne(delta, input);
+      return;
+    }
     state.wobble *= Math.exp(-4.2 * delta);
+    state.airborneAmount *= Math.exp(-7 * delta);
+    state.landingAmount *= Math.exp(-4.8 * delta);
     const targetCarve = input.steer;
     state.carve += (targetCarve - state.carve) * Math.min(1, delta * 7);
     const inputDirection = Math.sign(targetCarve);
@@ -83,6 +113,22 @@ export class SkiPhysics {
 
   canCollide(): boolean {
     return this.collisionCooldown <= 0;
+  }
+
+  beginJump(): void {
+    const state = this.state;
+    if (state.crashed || state.airborne) return;
+    const speed = Math.hypot(state.velocityX, state.velocityY);
+    state.airborne = true;
+    state.airborneHeight = 0.04;
+    state.airborneAmount = Math.max(state.airborneAmount, 0.08);
+    state.landingAmount = 0;
+    state.jump.verticalVelocity = 5.8 + Math.min(5.2, speed * 0.16);
+    state.jump.launchSpeed = speed;
+    state.jump.airtime = 0;
+    state.jump.distance = 0;
+    state.jump.sequence += 1;
+    this.collisionCooldown = 1;
   }
 
   applyMinorImpact(context: Readonly<ImpactContext>, reaction: Readonly<CrashReaction>): void {
@@ -194,6 +240,15 @@ export class SkiPhysics {
     this.state.crashed = false;
     this.state.wobble = 0;
     this.state.airborneHeight = 0;
+    this.state.airborne = false;
+    this.state.airborneAmount = 0;
+    this.state.landingAmount = 0;
+    this.state.jump.verticalVelocity = 0;
+    this.state.jump.launchSpeed = 0;
+    this.state.jump.airtime = 0;
+    this.state.jump.distance = 0;
+    this.state.jump.completedDistance = 0;
+    this.state.jump.sequence = 0;
     Object.assign(this.state.crash, createCrashVisualState());
     this.crashVelocityX = 0;
     this.crashVelocityY = 0;
@@ -358,5 +413,38 @@ export class SkiPhysics {
             : 0.3;
     state.velocityX = this.crashVelocityX;
     state.velocityY = this.crashVelocityY;
+  }
+
+  private stepAirborne(delta: number, input: Readonly<InputState>): void {
+    const state = this.state;
+    const jump = state.jump;
+    const previousX = state.position.x;
+    const previousY = state.position.y;
+    state.carve += (input.steer - state.carve) * Math.min(1, delta * 3.2);
+    state.velocityX += input.steer * 3.2 * delta;
+    state.velocityX *= Math.exp(-0.12 * delta);
+    state.velocityX = Math.max(-22, Math.min(22, state.velocityX));
+    state.position.x += state.velocityX * delta;
+    state.position.y += state.velocityY * delta;
+    state.facing +=
+      (state.carve * 0.24 - state.facing) * Math.min(1, delta * 2.4);
+    jump.verticalVelocity -= 14.5 * delta;
+    state.airborneHeight += jump.verticalVelocity * delta;
+    state.airborneAmount +=
+      (1 - state.airborneAmount) * (1 - Math.exp(-8 * delta));
+    jump.airtime += delta;
+    jump.distance += Math.hypot(
+      state.position.x - previousX,
+      state.position.y - previousY,
+    );
+    if (state.airborneHeight > 0) return;
+    state.airborneHeight = 0;
+    state.airborne = false;
+    state.velocityX *= 0.8;
+    state.velocityY *= 0.8;
+    state.landingAmount = 1;
+    jump.verticalVelocity = 0;
+    jump.completedDistance = jump.distance;
+    this.collisionCooldown = 0.45;
   }
 }
