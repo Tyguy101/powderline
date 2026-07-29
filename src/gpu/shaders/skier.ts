@@ -140,7 +140,9 @@ export function createSkierShader(): SkierShader {
   leftHand = mix(leftHand, vec2(-0.32, 0.12), crash);
   rightHand = mix(rightHand, vec2(0.29, -0.02), crash);
 
-  const poleTrail = vec2(traverse.mul(-0.08).add(lean.mul(-0.09)), -0.28);
+  // The skier faces downhill toward the bottom of the screen, so poles and
+  // spray trail uphill toward the top of the screen.
+  const poleTrail = vec2(traverse.mul(-0.08).add(lean.mul(-0.09)), 0.28);
   const leftPoleEnd = mix(leftHand.add(poleTrail).sub(vec2(0.08, 0)), vec2(-0.42, -0.2), crash);
   const rightPoleEnd = mix(rightHand.add(poleTrail).add(vec2(0.08, 0)), vec2(0.4, 0.12), crash);
 
@@ -150,8 +152,8 @@ export function createSkierShader(): SkierShader {
     shadowCenter,
     vec2(float(0.25).sub(air.mul(0.06)), float(0.065).sub(air.mul(0.015))),
   );
-  const sprayLeft = ellipse(point, leftSkiStart.add(vec2(-0.035, 0.02)), vec2(0.13, 0.07));
-  const sprayRight = ellipse(point, rightSkiStart.add(vec2(0.035, 0.02)), vec2(0.13, 0.07));
+  const sprayLeft = ellipse(point, leftSkiEnd.add(vec2(-0.035, 0.02)), vec2(0.13, 0.07));
+  const sprayRight = ellipse(point, rightSkiEnd.add(vec2(0.035, 0.02)), vec2(0.13, 0.07));
   const sprayMask = max(sprayLeft, sprayRight).mul(spray).mul(float(1).sub(air));
 
   const leftSki = capsule(point, leftSkiStart, leftSkiEnd, 0.018);
@@ -189,8 +191,8 @@ export function createSkierShader(): SkierShader {
   color = mix(color, vec3(0.07, 0.19, 0.23), max(leftPole, rightPole));
   color = mix(color, vec3(0.1, 0.23, 0.28), max(max(leftLeg, rightLeg), bootMask));
   color = mix(color, vec3(0.97, 0.42, 0.16), max(torso, max(leftArm, rightArm)));
-  color = mix(color, vec3(0.98, 0.72, 0.48), face);
   color = mix(color, vec3(0.12, 0.58, 0.68), helmet);
+  color = mix(color, vec3(0.98, 0.72, 0.48), face);
   color = mix(color, vec3(0.05, 0.16, 0.23), goggles);
 
   const bodyMask = max(
