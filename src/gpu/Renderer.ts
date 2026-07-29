@@ -161,6 +161,7 @@ export class GameRenderer {
     // legacy skier-local groove disabled so the mark does not move with the rig.
     this.skier.slideTrail.value = 0;
     this.skier.slideSpray.value = crash.slideTrail;
+    this.skier.jumpLift.value = Math.min(0.19, state.airborneHeight * 0.052);
     this.crashTrailMesh.visible = crash.active && crash.trailActive;
     this.crashTrail.worldX.value = this.cameraWorldX;
     this.crashTrail.worldY.value = this.cameraWorldY;
