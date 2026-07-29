@@ -22,6 +22,7 @@ import { createCollisionDebugShader } from './shaders/collisionDebug';
 import type { CrashReaction, ImpactContext } from '../simulation/CrashReaction';
 import { createCrashTrailShader } from './shaders/crashTrail';
 import { createTreeForegroundShader } from './shaders/treeForeground';
+import { TrackTrailBuffer } from './TrackTrailBuffer';
 
 const BASE_VIEW_HEIGHT = 80;
 
@@ -36,6 +37,7 @@ export class GameRenderer {
   private readonly collisionDebug;
   private readonly crashTrail;
   private readonly treeForeground;
+  private readonly tracks = new TrackTrailBuffer();
   private readonly snowMesh: Mesh;
   private readonly markerMesh: Mesh;
   private readonly featureMesh: Mesh;
@@ -83,6 +85,7 @@ export class GameRenderer {
     this.featureMesh = new Mesh(new PlaneGeometry(1, 1), this.features.material);
     this.featureMesh.position.z = 0.25;
     this.scene.add(this.featureMesh);
+    this.scene.add(this.tracks.mesh);
     this.crashTrailMesh = new Mesh(new PlaneGeometry(1, 1), this.crashTrail.material);
     this.crashTrailMesh.position.z = 0.38;
     this.crashTrailMesh.visible = false;
@@ -130,6 +133,7 @@ export class GameRenderer {
     this.markers.worldY.value = this.cameraWorldY - origin.y;
     this.features.worldX.value = this.cameraWorldX;
     this.features.worldY.value = this.cameraWorldY;
+    this.tracks.updateCamera(this.cameraWorldX, this.cameraWorldY);
     this.treeForeground.worldX.value = this.cameraWorldX;
     this.treeForeground.worldY.value = this.cameraWorldY;
     this.skier.lean.value = pose.lean;
@@ -212,6 +216,14 @@ export class GameRenderer {
     this.cameraWorldY = state.position.y + this.viewHeight * 0.19;
   }
 
+  recordTrail(state: Readonly<SkiState>, deltaSeconds: number): void {
+    this.tracks.record(state, deltaSeconds);
+  }
+
+  resetTrail(state: Readonly<SkiState>): void {
+    this.tracks.reset(state);
+  }
+
   setMarkersVisible(visible: boolean): void {
     this.markersVisible = visible;
     this.markerMesh.visible = visible;
@@ -245,13 +257,17 @@ export class GameRenderer {
   }
 
   get drawCalls(): number {
-    return 3 + Number(this.treeForegroundMesh.visible) + Number(this.crashTrailMesh.visible) +
+    return 4 + Number(this.treeForegroundMesh.visible) + Number(this.crashTrailMesh.visible) +
       Number(this.markersVisible) +
       Number(this.collisionDebugMesh.visible);
   }
 
   get visibleFeatureEstimate(): number {
     return Math.round((this.viewWidth / 12) * (this.viewHeight / 12) * 0.38);
+  }
+
+  get trackSampleCount(): number {
+    return this.tracks.sampleCount;
   }
 
   private readonly resize = (): void => {

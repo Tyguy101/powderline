@@ -125,6 +125,7 @@ export class Game {
               this.physics.state.crash.family,
             );
           }
+          this.renderer.recordTrail(this.physics.state, delta);
         }
         this.renderer.updateCamera(this.physics.state, delta);
       },
@@ -137,6 +138,7 @@ export class Game {
     this.replay.reset();
     this.origin.reset(this.physics.state.position);
     this.renderer.resetCamera(this.physics.state);
+    this.renderer.resetTrail(this.physics.state);
     this.crashOverlay.hide();
     this.crashPromptShown = false;
     this.renderer.clearImpactDebug();
@@ -218,6 +220,7 @@ export class Game {
       jumpHeight: state.airborneHeight,
       jumpDistance: state.jump.distance,
       completedJumpDistance: state.jump.completedDistance,
+      trackSamples: this.renderer.trackSampleCount,
     };
   }
 }
