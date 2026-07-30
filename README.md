@@ -65,6 +65,13 @@ Cloudflare Workers are no longer part of development or deployment.
 - Drag upward: brake; combine with left/right for a braking turn
 - Drag downward: speed tuck; combine with left/right for a slower tuck turn
 - `R`: restart after a crash
+- `P` / Escape: pause or resume
+- Enter / Space: menu confirmation
+- Controller left stick: analog steering; up brakes and down tucks
+- Controller triggers or shoulder buttons: brake and tuck
+- Controller Menu button: pause or resume
+- Controller primary face button: menu confirmation
+- Controller top face button: restart after a crash
 - `F3`: metrics overlay
 - `F4`: development crash laboratory
 - Development builds or `?dev=1`: `G` opens the pose inspector
@@ -96,7 +103,8 @@ The default production build currently includes:
   airborne, landing, crash, and idle poses
 - A wide, camera-relative downhill view with smooth look-ahead and origin rebasing
 - Deterministic fixed-step simulation at 60 Hz
-- Keyboard, pointer, mouse-drag, and touch controls with eight-direction input
+- Keyboard, pointer, mouse-drag, touch, and standard-layout gamepad controls
+  with eight-direction input
 - Standing, braking, and manually controlled tuck speeds
 - Turn sharpness that builds while steering is held
 - Deterministically generated shader-drawn trees, rocks, and red launch ramps
@@ -124,6 +132,6 @@ The current restored benchmark baseline is approximately 60 FPS on both the
 desktop and mobile automated profiles, with four normal gameplay draw calls.
 
 Planned later milestones include expanded obstacle variety, tricks and
-distance/trick scoring, additional ramp and landing behavior, gamepad input,
-dynamic quality selection, GPU compute feature generation, clipmaps, and a
+distance/trick scoring, additional ramp and landing behavior, dynamic quality
+selection, GPU compute feature generation, clipmaps, and a
 future arcade portal. Fully persistent terrain deformation remains experimental.

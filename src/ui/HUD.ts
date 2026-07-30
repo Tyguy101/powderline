@@ -7,6 +7,11 @@ export class HUD {
   private readonly distance: HTMLElement;
   private readonly speed: HTMLElement;
   private readonly debug: HTMLElement;
+  private readonly keyboardHint: HTMLElement;
+  private readonly controllerHint: HTMLElement;
+  private readonly controllerToast: HTMLElement;
+  private readonly pauseOverlay: HTMLElement;
+  private toastTimer = 0;
   private debugVisible = new URLSearchParams(location.search).has('debug');
 
   constructor(root: HTMLElement, config: GameConfig) {
@@ -19,13 +24,25 @@ export class HUD {
           <div><span class="label">SPEED</span><strong id="speed">0 km/h</strong></div>
         </div>
       </header>
-      <div class="hint"><kbd>A</kbd><kbd>D</kbd> carve <span>•</span> <kbd>W</kbd> brake <span>•</span> <kbd>S</kbd> tuck <span>•</span> drag in 8 directions${config.developmentMode ? ' <span>•</span> <kbd>G</kbd> poses' : ''}</div>
+      <div class="hint">
+        <span data-keyboard-help><kbd>A</kbd><kbd>D</kbd> carve <i>•</i> <kbd>W</kbd> brake <i>•</i> <kbd>S</kbd> tuck <i>•</i> drag in 8 directions${config.developmentMode ? ' <i>•</i> <kbd>G</kbd> poses' : ''}</span>
+        <span data-controller-help hidden>Left stick steer/up brake/down tuck <i>•</i> triggers brake/tuck <i>•</i> Menu pause <i>•</i> primary confirm <i>•</i> top face restart</span>
+      </div>
+      <div class="controller-toast" role="status" aria-live="polite"></div>
+      <section class="pause-overlay" aria-label="Game paused">
+        <div><span>PAUSED</span><strong>Fresh tracks, whenever you are.</strong>
+        <p>Press the Menu button, primary button, <kbd>P</kbd>, or <kbd>Esc</kbd> to continue.</p></div>
+      </section>
       <aside id="debug" class="debug" aria-live="polite"></aside>
       <div class="status-chip"><i></i> WEBGPU PROCEDURAL <span>BUILD ${BUILD_ID}</span></div>`,
     );
     this.distance = root.querySelector('#distance')!;
     this.speed = root.querySelector('#speed')!;
     this.debug = root.querySelector('#debug')!;
+    this.keyboardHint = root.querySelector('[data-keyboard-help]')!;
+    this.controllerHint = root.querySelector('[data-controller-help]')!;
+    this.controllerToast = root.querySelector('.controller-toast')!;
+    this.pauseOverlay = root.querySelector('.pause-overlay')!;
     addEventListener('keydown', (event) => {
       if (event.code === 'F3') {
         event.preventDefault();
@@ -33,6 +50,23 @@ export class HUD {
       }
     });
     this.debug.dataset.seed = String(config.seed);
+  }
+
+  setControllerConnected(connected: boolean): void {
+    this.keyboardHint.hidden = connected;
+    this.controllerHint.hidden = !connected;
+    this.controllerToast.textContent = connected
+      ? 'Controller connected'
+      : 'Controller disconnected';
+    this.controllerToast.classList.add('visible');
+    clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => {
+      this.controllerToast.classList.remove('visible');
+    }, 2200);
+  }
+
+  setPaused(paused: boolean): void {
+    this.pauseOverlay.classList.toggle('visible', paused);
   }
 
   update(

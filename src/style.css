@@ -46,7 +46,29 @@ button, kbd { font: inherit; }
   font-size: 11px; font-weight: 700; letter-spacing: .04em; white-space: nowrap;
 }
 .hint kbd { color: #10313a; font-weight: 900; }
-.hint span { padding: 0 5px; opacity: .3; }
+.hint > span { padding: 0; }
+.hint i { padding: 0 5px; opacity: .3; font-style: normal; }
+.controller-toast {
+  position: fixed; z-index: 5; left: 50%; top: 78px; transform: translate(-50%, -8px);
+  padding: 8px 12px; border: 1px solid rgba(16,49,58,.14); border-radius: 999px;
+  background: rgba(246,252,252,.9); color: #10313a; box-shadow: 0 10px 30px rgba(18,55,64,.14);
+  font-size: 10px; font-weight: 850; letter-spacing: .08em; opacity: 0;
+  transition: opacity 160ms ease, transform 160ms ease; pointer-events: none;
+}
+.controller-toast.visible { opacity: 1; transform: translate(-50%, 0); }
+.pause-overlay {
+  position: fixed; z-index: 7; inset: 0; display: none; place-items: center; padding: 24px;
+  background: rgba(13,42,49,.18); backdrop-filter: blur(4px);
+}
+.pause-overlay.visible { display: grid; }
+.pause-overlay > div {
+  width: min(430px, 100%); padding: 28px; border: 1px solid rgba(16,49,58,.16);
+  border-radius: 24px; background: rgba(246,252,252,.95);
+  box-shadow: 0 26px 90px rgba(13,45,52,.22); text-align: center;
+}
+.pause-overlay span { color: #db5037; font-size: 10px; font-weight: 900; letter-spacing: .2em; }
+.pause-overlay strong { display: block; margin-top: 8px; font-size: 25px; letter-spacing: -.035em; }
+.pause-overlay p { margin: 10px 0 0; opacity: .68; font-size: 12px; }
 .status-chip {
   position: fixed; z-index: 3; left: 28px; bottom: 26px; display: flex; align-items: center; gap: 7px;
   font-size: 9px; font-weight: 900; letter-spacing: .13em; opacity: .62;

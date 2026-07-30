@@ -8,6 +8,7 @@ describe('replay serialization', () => {
       { steer: 0, brake: false, tuck: false },
       { steer: 0.5, brake: false, tuck: false },
       { steer: 0.5, brake: false, tuck: false },
+      { steer: 0.37, brake: false, tuck: false },
       { steer: -1, brake: true, tuck: false },
       { steer: 0, brake: false, tuck: true },
     ];
@@ -20,7 +21,7 @@ describe('replay serialization', () => {
     }));
 
     expect(replaySeed(serialized)).toBe(424242);
-    expect(data.runs).toHaveLength(4);
+    expect(data.runs).toHaveLength(5);
     expect(played).toEqual(recorded);
   });
 });

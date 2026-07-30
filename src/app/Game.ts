@@ -3,6 +3,7 @@ import { CameraRelativeOrigin } from '../core/WorldCoordinates';
 import { GameRenderer } from '../gpu/Renderer';
 import { FrameMetrics } from '../instrumentation/FrameMetrics';
 import { InputManager } from '../input/InputManager';
+import type { InputState } from '../input/InputState';
 import { SkiPhysics } from '../simulation/SkiPhysics';
 import { CollisionSystem } from '../simulation/CollisionSystem';
 import { ReplaySystem } from '../simulation/ReplaySystem';
@@ -27,6 +28,12 @@ export class Game {
   private readonly loop: FixedStepLoop;
   private poseInspectionActive = false;
   private crashPromptShown = false;
+  private paused = false;
+  private simulationInput: Readonly<InputState> = {
+    steer: 0,
+    brake: false,
+    tuck: false,
+  };
 
   constructor(
     root: HTMLElement,
@@ -40,8 +47,11 @@ export class Game {
     this.renderer = new GameRenderer(canvas, config.seed, config.cameraTestMode);
     this.collision = new CollisionSystem(config.seed);
     this.replay = new ReplaySystem(config.seed, config.replay);
-    this.input = new InputManager(canvas);
     this.hud = new HUD(root, config);
+    this.input = new InputManager(
+      canvas,
+      (connected) => this.hud.setControllerConnected(connected),
+    );
     this.crashOverlay = new CrashOverlay(root, () => this.restart());
     if (config.developmentMode) {
       new PoseGallery(
@@ -69,11 +79,21 @@ export class Game {
       config.fixedStepSeconds,
       config.maxFrameSeconds,
       (delta) => {
-        if (this.input.consumeRestart() && this.physics.state.crashed) this.restart();
-        if (!this.poseInspectionActive) {
+        this.input.pollGamepads();
+        if (this.input.consumePause()) this.setPaused(!this.paused);
+        const confirm = this.input.consumeConfirm();
+        if (confirm && this.paused) this.setPaused(false);
+        if (
+          (this.input.consumeRestart() || (confirm && this.physics.state.crashed)) &&
+          this.physics.state.crashed
+        ) {
+          this.restart();
+        }
+        if (!this.paused && !this.poseInspectionActive) {
           const replayInput = this.physics.state.crashed
             ? this.input.state
             : this.replay.sample(this.input.state);
+          this.simulationInput = replayInput;
           this.physics.step(delta, replayInput);
           if (
             !this.physics.state.crashed &&
@@ -134,6 +154,7 @@ export class Game {
   }
 
   private restart(): void {
+    this.setPaused(false);
     this.physics.reset();
     this.replay.reset();
     this.origin.reset(this.physics.state.position);
@@ -142,6 +163,11 @@ export class Game {
     this.crashOverlay.hide();
     this.crashPromptShown = false;
     this.renderer.clearImpactDebug();
+  }
+
+  private setPaused(paused: boolean): void {
+    this.paused = paused;
+    this.hud.setPaused(paused);
   }
 
   private triggerLabCrash(settings: {
@@ -198,7 +224,7 @@ export class Game {
     const state = this.physics.state;
     this.origin.update(state.position);
     const snapshot = this.metrics.push(frameMs);
-    this.renderer.draw(state, this.input.state, this.origin.origin);
+    this.renderer.draw(state, this.simulationInput, this.origin.origin);
     this.hud.update(
       state,
       snapshot,
@@ -221,6 +247,8 @@ export class Game {
       jumpDistance: state.jump.distance,
       completedJumpDistance: state.jump.completedDistance,
       trackSamples: this.renderer.trackSampleCount,
+      paused: String(this.paused),
+      gamepad: String(this.input.controllerConnected),
     };
   }
 }
