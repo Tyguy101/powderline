@@ -1,15 +1,22 @@
 # Powderline
 
-Powderline is an original, shader-drawn downhill skiing playground and the first
-slice of a reusable GPU procedural-world engine. The current build is deliberately
-small: an endless mathematical snowfield, a procedural skier, fixed-step movement,
-camera-relative coordinates, input, and measurement tooling.
+Powderline is an original, shader-drawn downhill skiing game and the first slice
+of a reusable GPU procedural-world engine. The current prototype includes an
+endless deterministic mountain, responsive skiing, obstacles and collisions,
+procedural crashes, ramps and jumping, persistent-looking lightweight ski tracks,
+replay links, and development/measurement tooling.
 
 No image, texture, model, font, or audio assets are used by the game.
 
 ## Run
 
 Requires a current browser with WebGPU enabled and Node.js 22 or newer.
+
+The active local checkout is:
+
+```text
+C:\Users\tyler\Procedural Games
+```
 
 ```bash
 npm install
@@ -82,22 +89,41 @@ The bottom-left status chip includes the eight-character Git build identifier.
 
 ## Status
 
-Implemented: repository skeleton, WebGPU initialization and compatibility handling,
-TSL procedural snow, a small pose-driven TSL skier, wide forward-looking camera,
-60 Hz fixed simulation, basic carving, braking and tuck, camera-relative rebasing,
-deterministic shader-drawn trees and rocks, CPU circle collisions, deterministic
-minor-contact reactions and four procedural crash families, crash/restart,
-replay-link serialization and playback, development pose/scale/crash inspection,
-F3 metrics, deterministic tests, crash-sequence capture, and JSON/Markdown
-benchmark reports. Crash selection uses speed, collision normal, contact offset,
-obstacle parameters, carve state, and controlled hash variation.
+The default production build currently includes:
 
-The procedural feature field also includes small red launch ramps. Ramp takeoff
-preserves the skier's velocity, derives height and distance from launch speed,
-allows reduced steering in the air, blends through a ski-jumper pose and landing
-compression, and records launch speed, airtime, and completed distance for future
-trick and distance scoring.
+- WebGPU and Three.js TSL rendering with no imported game art
+- A shader-drawn skier with interpolated neutral, carve, traverse, brake, tuck,
+  airborne, landing, crash, and idle poses
+- A wide, camera-relative downhill view with smooth look-ahead and origin rebasing
+- Deterministic fixed-step simulation at 60 Hz
+- Keyboard, pointer, mouse-drag, and touch controls with eight-direction input
+- Standing, braking, and manually controlled tuck speeds
+- Turn sharpness that builds while steering is held
+- Deterministically generated shader-drawn trees, rocks, and red launch ramps
+- CPU circle collisions with minor impacts, stumbles, and full crashes
+- Four condition-driven crash families with tree/rock-specific variations,
+  impact snow, sliding marks, equipment motion, camera shake, and quick restart
+- Speed- and direction-based ramp launches, an arcing airborne path, limited
+  aerial steering, a ski-jumper pose, guaranteed landing, and landing slowdown
+- A fixed-size GPU instanced circular trail buffer with twin ski grooves,
+  carve-strength marks, fading spray, powder shading, and landing bursts
+- Deterministic replay serialization and playback
+- Pose, camera-scale, collision, and crash-laboratory development tools
+- F3 metrics, automated tests, screenshot/capture tools, and desktop/mobile
+  Playwright benchmarks
 
-Not implemented: clipmaps, GPU compute feature generation, tracks, jumping, gamepad
-input, expanded scoring, dynamic quality selection, WebGL 2 fallback, or persistent
-deformation. These are later milestones.
+The lightweight trail buffer is the production track implementation. A toroidal
+persistent snow-mask experiment was tested and then removed from the default
+rendering path because its visual benefit did not justify reducing benchmark
+performance from approximately 60 FPS to 47 FPS on desktop and 51 FPS on mobile.
+That work remains preserved on the
+`codex/experimental-toroidal-snow-mask` Git branch. The normal game does not
+allocate, update, relax, or sample that persistent texture.
+
+The current restored benchmark baseline is approximately 60 FPS on both the
+desktop and mobile automated profiles, with four normal gameplay draw calls.
+
+Planned later milestones include expanded obstacle variety, tricks and
+distance/trick scoring, additional ramp and landing behavior, gamepad input,
+dynamic quality selection, GPU compute feature generation, clipmaps, and a
+future arcade portal. Fully persistent terrain deformation remains experimental.
