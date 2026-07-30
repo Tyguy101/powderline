@@ -13,6 +13,7 @@ function snapshot(system: NpcSystem): unknown {
     velocityY: Number(npc.velocityY.toFixed(5)),
     fall: npc.fall,
     variation: Number(npc.variation.toFixed(5)),
+    colors: [npc.hatColor, npc.topColor, npc.bottomColor, npc.accessoryColor],
   }));
 }
 
@@ -45,6 +46,33 @@ describe('NpcSystem', () => {
     expect(system.metrics.active).toBeGreaterThanOrEqual(3);
     expect(system.metrics.active).toBeLessThanOrEqual(5);
     expect(system.metrics.recycled).toBeGreaterThan(0);
+  });
+
+  it('assigns deterministic clothing colors from the six-color palette', () => {
+    const player = new SkiPhysics();
+    const first = new NpcSystem(771);
+    const second = new NpcSystem(771);
+    first.reset(player.state);
+    second.reset(player.state);
+    expect(first.states.map((npc) => [
+      npc.hatColor,
+      npc.topColor,
+      npc.bottomColor,
+      npc.accessoryColor,
+    ])).toEqual(second.states.map((npc) => [
+      npc.hatColor,
+      npc.topColor,
+      npc.bottomColor,
+      npc.accessoryColor,
+    ]));
+    for (const npc of first.states) {
+      expect(npc.hatColor).toBeGreaterThanOrEqual(0);
+      expect(npc.hatColor).toBeLessThan(6);
+      expect(npc.topColor).toBeGreaterThanOrEqual(0);
+      expect(npc.topColor).toBeLessThan(6);
+      expect(npc.bottomColor).toBeGreaterThanOrEqual(0);
+      expect(npc.bottomColor).toBeLessThan(6);
+    }
   });
 
   it('classifies contact and drives an NPC fall deterministically', () => {

@@ -112,8 +112,11 @@ The default production build currently includes:
 - Deterministically generated shader-drawn trees, rocks, and red launch ramps
 - Three deterministic shader-drawn mountain-user rigs: a tucked speed skier,
   upright snowplow beginner, and sideways snowboarder. A fixed pool keeps three
-  to five active (three on low/mobile quality), with seeded visual variation, avoidance, passing,
-  falls, recovery, snowboard ramp hops, and player/NPC/NPC collision reactions.
+  to five active (three on low/mobile quality), with independently seeded
+  six-color headwear, tops, bottoms, and snowboard-goggle accents. Their bent
+  limb rigs interpolate carve, traversal, compression, airborne, fall, slide,
+  and recovery poses, alongside deterministic avoidance, passing, snowboard
+  ramp hops, and player/NPC/NPC collision reactions.
 - CPU circle collisions with minor impacts, stumbles, and full crashes
 - Four condition-driven crash families with tree/rock-specific variations,
   impact snow, sliding marks, equipment motion, camera shake, and quick restart

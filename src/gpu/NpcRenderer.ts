@@ -57,12 +57,24 @@ function typeIndex(type: NpcType): number {
   return type === 'speed-skier' ? 0 : type === 'beginner-skier' ? 1 : 2;
 }
 
+function paletteColor(index: Node<'float'>): Node<'vec3'> {
+  let color: Node<'vec3'> = vec3(0.9, 0.16, 0.13);
+  color = mix(color, vec3(1, 0.43, 0.08), typeMask(index, 1));
+  color = mix(color, vec3(0.98, 0.75, 0.08), typeMask(index, 2));
+  color = mix(color, vec3(0.04, 0.65, 0.53), typeMask(index, 3));
+  color = mix(color, vec3(0.12, 0.38, 0.9), typeMask(index, 4));
+  color = mix(color, vec3(0.61, 0.2, 0.82), typeMask(index, 5));
+  return color;
+}
+
 export class NpcRenderer {
   readonly mesh: InstancedMesh;
   private readonly poseData = new Float32Array(MAX_NPCS * 4);
-  private readonly colorData = new Float32Array(MAX_NPCS * 4);
+  private readonly motionData = new Float32Array(MAX_NPCS * 4);
+  private readonly clothingData = new Float32Array(MAX_NPCS * 4);
   private readonly poseAttribute: StorageInstancedBufferAttribute;
-  private readonly colorAttribute: StorageInstancedBufferAttribute;
+  private readonly motionAttribute: StorageInstancedBufferAttribute;
+  private readonly clothingAttribute: StorageInstancedBufferAttribute;
   private readonly matrix = new Matrix4();
   private readonly position = new Vector3();
   private readonly rotation = new Quaternion();
@@ -71,14 +83,19 @@ export class NpcRenderer {
 
   constructor() {
     this.poseAttribute = new StorageInstancedBufferAttribute(this.poseData, 4);
-    this.colorAttribute = new StorageInstancedBufferAttribute(this.colorData, 4);
+    this.motionAttribute = new StorageInstancedBufferAttribute(this.motionData, 4);
+    this.clothingAttribute = new StorageInstancedBufferAttribute(this.clothingData, 4);
     this.poseAttribute.setUsage(DynamicDrawUsage);
-    this.colorAttribute.setUsage(DynamicDrawUsage);
+    this.motionAttribute.setUsage(DynamicDrawUsage);
+    this.clothingAttribute.setUsage(DynamicDrawUsage);
     const pose = varying(
       storage(this.poseAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
     ) as Node<'vec4'>;
-    const colors = varying(
-      storage(this.colorAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
+    const motion = varying(
+      storage(this.motionAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
+    ) as Node<'vec4'>;
+    const clothing = varying(
+      storage(this.clothingAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
     ) as Node<'vec4'>;
     const p = uv().sub(0.5);
     const speedMask = typeMask(pose.x, 0);
@@ -88,31 +105,98 @@ export class NpcRenderer {
     const carve = pose.y;
     const fall = pose.z;
     const recovery = pose.w;
+    const compression = motion.x;
+    const traverse = motion.y;
+    const fallKind = motion.z;
+    const airborne = motion.w;
     const fallCurl = sin(fall.mul(3.14159)).mul(float(1).sub(recovery.mul(0.4)));
+    const stumbleFall = typeMask(fallKind, 1).mul(fallCurl);
+    const spinFall = typeMask(fallKind, 2).mul(fallCurl);
+    const tumbleFall = typeMask(fallKind, 3).mul(fallCurl);
+    const fullFall = max(stumbleFall, max(spinFall, tumbleFall));
     const upright = beginnerMask;
-    const lean = carve.mul(mix(0.075, 0.045, upright)).add(fallCurl.mul(0.11));
-    const hip = vec2(lean, float(-0.01).sub(boarderMask.mul(0.03)));
-    const chest = vec2(
-      lean.mul(float(1.38).add(boarderMask.mul(0.14))),
-      float(0.115).add(upright.mul(0.035)).sub(abs(carve).mul(0.03)),
+    const lean = carve.mul(mix(0.09, 0.052, upright))
+      .add(traverse.mul(0.035))
+      .add(stumbleFall.mul(0.06));
+    const baseHip = vec2(
+      lean,
+      float(-0.01).sub(boarderMask.mul(0.03)).sub(compression.mul(0.055)),
     );
-    const head = vec2(lean.mul(1.58), float(0.225).add(upright.mul(0.05)));
+    const baseChest = vec2(
+      lean.mul(float(1.38).add(boarderMask.mul(0.14))),
+      float(0.115).add(upright.mul(0.035)).sub(compression.mul(0.09)),
+    );
+    const baseHead = vec2(
+      lean.mul(1.62),
+      float(0.225).add(upright.mul(0.05)).sub(compression.mul(0.12)),
+    );
+    const fallDirection = mix(-1, 1, typeMask(fallKind, 2));
+    const fallHip = vec2(fallDirection.mul(-0.08), -0.085);
+    const fallChest = vec2(fallDirection.mul(0.105), -0.015);
+    const fallHead = vec2(fallDirection.mul(0.245), -0.035);
+    const hip = mix(baseHip, fallHip, fullFall);
+    const chest = mix(baseChest, fallChest, fullFall);
+    const head = mix(baseHead, fallHead, fullFall);
     const bootSpread = speedMask.mul(0.052).add(beginnerMask.mul(0.12)).add(boarderMask.mul(0.105));
-    const leftBoot = vec2(lean.sub(bootSpread), -0.205);
-    const rightBoot = vec2(lean.add(bootSpread), -0.205);
+    const outside = carve.mul(0.075);
+    const baseLeftBoot = vec2(
+      lean.sub(bootSpread).sub(max(0, outside)),
+      float(-0.205).add(max(0, carve).mul(0.035)),
+    );
+    const baseRightBoot = vec2(
+      lean.add(bootSpread).sub(max(0, outside.mul(-1))),
+      float(-0.205).add(max(0, carve.mul(-1)).mul(0.035)),
+    );
+    const leftBoot = mix(baseLeftBoot, vec2(-0.22, -0.03), fullFall);
+    const rightBoot = mix(baseRightBoot, vec2(0.11, 0.16), fullFall);
     const body = capsule(p, hip, chest, float(0.082).add(upright.mul(0.016)).add(boarderMask.mul(0.008)));
     const helmet = ellipse(p, head, vec2(0.074, 0.08));
     const goggles = capsule(p, head.add(vec2(-0.055, -0.008)), head.add(vec2(0.055, -0.008)), 0.019);
+    const leftKnee = mix(
+      hip.sub(vec2(0.025, 0)),
+      leftBoot,
+      0.52,
+    ).add(vec2(carve.mul(-0.035), float(0.025).add(compression.mul(0.055))));
+    const rightKnee = mix(
+      hip.add(vec2(0.025, 0)),
+      rightBoot,
+      0.52,
+    ).add(vec2(carve.mul(-0.035), float(0.025).add(compression.mul(0.055))));
     const legs = max(
-      capsule(p, hip.sub(vec2(0.027, 0)), leftBoot, float(0.033).add(upright.mul(0.007))),
-      capsule(p, hip.add(vec2(0.027, 0)), rightBoot, float(0.033).add(upright.mul(0.007))),
+      max(
+        capsule(p, hip.sub(vec2(0.027, 0)), leftKnee, float(0.034).add(upright.mul(0.007))),
+        capsule(p, leftKnee, leftBoot, 0.032),
+      ),
+      max(
+        capsule(p, hip.add(vec2(0.027, 0)), rightKnee, float(0.034).add(upright.mul(0.007))),
+        capsule(p, rightKnee, rightBoot, 0.032),
+      ),
     );
     const handWidth = speedMask.mul(0.13).add(beginnerMask.mul(0.22)).add(boarderMask.mul(0.235));
-    const leftHand = vec2(handWidth.mul(-1), float(0.02).add(upright.mul(0.055)));
-    const rightHand = vec2(handWidth, float(0.02).add(upright.mul(0.055)).add(boarderMask.mul(0.075)));
+    const airSpread = airborne.mul(0.07);
+    const baseLeftHand = vec2(
+      handWidth.mul(-1).sub(airSpread),
+      float(0.02).add(upright.mul(0.055)).add(airborne.mul(0.09)),
+    );
+    const baseRightHand = vec2(
+      handWidth.add(airSpread),
+      float(0.02).add(upright.mul(0.055)).add(boarderMask.mul(0.075)).add(airborne.mul(0.09)),
+    );
+    const leftHand = mix(baseLeftHand, vec2(-0.29, 0.13), fullFall);
+    const rightHand = mix(baseRightHand, vec2(0.28, -0.13), fullFall);
+    const leftElbow = mix(chest.sub(vec2(0.035, 0)), leftHand, 0.52)
+      .add(vec2(-0.025, compression.mul(0.025)));
+    const rightElbow = mix(chest.add(vec2(0.035, 0)), rightHand, 0.52)
+      .add(vec2(0.025, compression.mul(0.025)));
     const arms = max(
-      capsule(p, chest.sub(vec2(0.04, 0)), leftHand, 0.029),
-      capsule(p, chest.add(vec2(0.04, 0)), rightHand, 0.029),
+      max(
+        capsule(p, chest.sub(vec2(0.04, 0)), leftElbow, 0.03),
+        capsule(p, leftElbow, leftHand, 0.027),
+      ),
+      max(
+        capsule(p, chest.add(vec2(0.04, 0)), rightElbow, 0.03),
+        capsule(p, rightElbow, rightHand, 0.027),
+      ),
     );
     const skiHeading = carve.mul(0.1);
     const wedge = beginnerMask.mul(0.13);
@@ -125,22 +209,32 @@ export class NpcRenderer {
       capsule(p, leftHand, vec2(-0.28, -0.3), 0.01),
       capsule(p, rightHand, vec2(0.28, -0.3), 0.01),
     ).mul(skierMask);
-    const shape = max(max(body, helmet), max(legs, arms));
     const equipment = max(max(skis, snowboard), poles);
     const shadow = ellipse(p, vec2(0, -0.31), vec2(float(0.22).add(abs(carve).mul(0.05)), 0.035))
-      .mul(float(1).sub(clamp(colors.w, 0, 1)));
+      .mul(float(1).sub(clamp(airborne, 0, 1)));
     const powder = ellipse(
       p,
       vec2(carve.mul(-0.16), -0.29),
       vec2(float(0.09).add(abs(carve).mul(0.09)), 0.055),
     ).mul(abs(carve).mul(0.65));
 
+    const hatColor = paletteColor(clothing.x);
+    const topColor = paletteColor(clothing.y);
+    const bottomColor = paletteColor(clothing.z);
+    const accessoryColor = paletteColor(clothing.w);
     let color: Node<'vec3'> = vec3(0.12, 0.24, 0.27);
     color = mix(color, vec3(0.83, 0.91, 0.94), shadow.mul(0.22));
-    color = mix(color, vec3(colors.x, colors.y, colors.z), shape);
+    color = mix(color, bottomColor, legs);
+    color = mix(color, topColor, max(body, arms));
+    color = mix(color, hatColor, helmet);
     color = mix(color, vec3(0.1, 0.13, 0.15), equipment);
-    color = mix(color, vec3(0.11, 0.69, 0.84), goggles);
+    color = mix(
+      color,
+      mix(vec3(0.11, 0.69, 0.84), accessoryColor, boarderMask),
+      goggles,
+    );
     color = mix(color, vec3(0.97, 0.995, 1), powder);
+    const shape = max(max(body, helmet), max(legs, arms));
     const alpha = max(max(shape, equipment), max(goggles, max(shadow.mul(0.24), powder.mul(0.74))));
     const material = new MeshBasicNodeMaterial();
     material.colorNode = color;
@@ -163,11 +257,15 @@ export class NpcRenderer {
         ? 0
         : Math.min(1, npc.fallTime / Math.max(0.01, npc.fallDuration));
       this.poseData[offset + 3] = npc.recovery;
-      const palette = typeIndex(npc.type);
-      this.colorData[offset] = palette === 0 ? 0.84 : palette === 1 ? 0.98 : 0.19;
-      this.colorData[offset + 1] = palette === 0 ? 0.17 : palette === 1 ? 0.56 : 0.38;
-      this.colorData[offset + 2] = palette === 0 ? 0.14 : palette === 1 ? 0.12 : 0.82;
-      this.colorData[offset + 3] = npc.airborne;
+      this.motionData[offset] = npc.compression;
+      this.motionData[offset + 1] = npc.traverse;
+      this.motionData[offset + 2] =
+        npc.fall === 'stumble' ? 1 : npc.fall === 'spin' ? 2 : npc.fall === 'tumble' ? 3 : 0;
+      this.motionData[offset + 3] = npc.airborne;
+      this.clothingData[offset] = npc.hatColor;
+      this.clothingData[offset + 1] = npc.topColor;
+      this.clothingData[offset + 2] = npc.bottomColor;
+      this.clothingData[offset + 3] = npc.accessoryColor;
       this.position.set(npc.x - cameraX, cameraY - npc.y - npc.airborne * 1.25, 0);
       const fallRotation = npc.fall === 'spin'
         ? npc.fallTime * 5.2
@@ -182,6 +280,7 @@ export class NpcRenderer {
     }
     this.mesh.instanceMatrix.needsUpdate = true;
     this.poseAttribute.needsUpdate = true;
-    this.colorAttribute.needsUpdate = true;
+    this.motionAttribute.needsUpdate = true;
+    this.clothingAttribute.needsUpdate = true;
   }
 }

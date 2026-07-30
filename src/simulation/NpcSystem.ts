@@ -20,8 +20,14 @@ export interface NpcState {
   facing: number;
   carve: number;
   pose: number;
+  compression: number;
+  traverse: number;
   phase: number;
   variation: number;
+  hatColor: number;
+  topColor: number;
+  bottomColor: number;
+  accessoryColor: number;
   fall: NpcFall;
   fallTime: number;
   fallDuration: number;
@@ -63,8 +69,14 @@ const createNpc = (slot: number): NpcState => ({
   facing: 0,
   carve: 0,
   pose: 0,
+  compression: 0,
+  traverse: 0,
   phase: 0,
   variation: 0,
+  hatColor: slot % 6,
+  topColor: (slot + 2) % 6,
+  bottomColor: (slot + 4) % 6,
+  accessoryColor: (slot + 1) % 6,
   fall: 'none',
   fallTime: 0,
   fallDuration: 0,
@@ -209,7 +221,17 @@ export class NpcSystem {
     npc.y += npc.velocityY * delta;
     npc.facing += (npc.carve * (typeIndex === 2 ? 0.78 : 0.55) - npc.facing) *
       (1 - Math.exp(-5 * delta));
-    npc.pose = Math.abs(npc.carve);
+    const carveStrength = Math.abs(npc.carve);
+    const speedRatio = Math.min(1, Math.hypot(npc.velocityX, npc.velocityY) / 30);
+    const compressionTarget =
+      carveStrength * (npc.type === 'speed-skier' ? 0.62 : 0.38) +
+      speedRatio * (npc.type === 'speed-skier' ? 0.28 : 0.1) +
+      npc.recovery * 0.72;
+    npc.compression +=
+      (compressionTarget - npc.compression) * (1 - Math.exp(-5.5 * delta));
+    npc.traverse +=
+      (npc.facing - npc.traverse) * (1 - Math.exp(-4.2 * delta));
+    npc.pose = carveStrength;
     npc.recovery *= Math.exp(-3.8 * delta);
     if (npc.airborne > 0) npc.airborne = Math.max(0, npc.airborne - delta * 0.82);
 
@@ -255,6 +277,12 @@ export class NpcSystem {
     npc.fallTime += delta;
     const progress = Math.min(1, npc.fallTime / npc.fallDuration);
     npc.pose = progress;
+    npc.compression +=
+      ((npc.fall === 'stumble' ? 0.68 : 0.3) - npc.compression) *
+      (1 - Math.exp(-7 * delta));
+    npc.traverse +=
+      (Math.sign(npc.velocityX || 1) * 0.92 - npc.traverse) *
+      (1 - Math.exp(-4 * delta));
     const drag = Math.exp(-(npc.fall === 'stumble' ? 1.2 : 2.1) * delta);
     npc.x += npc.velocityX * delta;
     npc.y += npc.velocityY * delta;
@@ -282,7 +310,13 @@ export class NpcSystem {
     npc.facing = 0;
     npc.carve = 0;
     npc.pose = 0;
+    npc.compression = 0;
+    npc.traverse = 0;
     npc.phase = hashUnit(this.seed, npc.slot, key, 26) * 14;
+    npc.hatColor = hashCoordinates(this.seed, npc.slot, key, 31) % 6;
+    npc.topColor = hashCoordinates(this.seed, npc.slot, key, 32) % 6;
+    npc.bottomColor = hashCoordinates(this.seed, npc.slot, key, 33) % 6;
+    npc.accessoryColor = hashCoordinates(this.seed, npc.slot, key, 34) % 6;
     npc.fall = 'none';
     npc.fallTime = 0;
     npc.recovery = 0;
@@ -324,7 +358,13 @@ export class NpcSystem {
       npc.carve = index === 0 ? this.labPose : Math.sin(npc.phase * (0.7 + index * 0.35)) * 0.78;
       npc.facing = npc.carve * (npc.type === 'snowboarder' ? 0.8 : 0.5);
       npc.pose = Math.abs(npc.carve);
+      npc.compression = Math.abs(npc.carve) * 0.62;
+      npc.traverse = npc.facing;
       npc.variation = 0.2 + index * 0.28;
+      npc.hatColor = (index * 2) % 6;
+      npc.topColor = (index * 2 + 1) % 6;
+      npc.bottomColor = (index * 2 + 3) % 6;
+      npc.accessoryColor = (index * 2 + 4) % 6;
       npc.fall = index === 0 ? this.labFall : 'none';
       npc.fallTime = this.labFall === 'none' ? 0 : (npc.fallTime + delta) % 1.6;
       npc.fallDuration = 1.6;
