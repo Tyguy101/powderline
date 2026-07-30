@@ -12,6 +12,8 @@ import { CrashOverlay } from '../ui/CrashOverlay';
 import { HUD } from '../ui/HUD';
 import { PoseGallery } from '../ui/PoseGallery';
 import { CrashLab } from '../ui/CrashLab';
+import { NpcLab } from '../ui/NpcLab';
+import { NpcSystem } from '../simulation/NpcSystem';
 import { BUILD_ID } from './build';
 import type { GameConfig } from './config';
 
@@ -24,9 +26,11 @@ export class Game {
   private readonly renderer: GameRenderer;
   private readonly collision: CollisionSystem;
   private readonly replay: ReplaySystem;
+  private readonly npcs: NpcSystem;
   private readonly crashOverlay: CrashOverlay;
   private readonly loop: FixedStepLoop;
   private poseInspectionActive = false;
+  private npcInspectionActive = false;
   private crashPromptShown = false;
   private paused = false;
   private simulationInput: Readonly<InputState> = {
@@ -47,6 +51,10 @@ export class Game {
     this.renderer = new GameRenderer(canvas, config.seed, config.cameraTestMode);
     this.collision = new CollisionSystem(config.seed);
     this.replay = new ReplaySystem(config.seed, config.replay);
+    this.npcs = new NpcSystem(
+      config.seed,
+      config.quality === 'low' || config.quality === 'potato' ? 3 : 5,
+    );
     this.hud = new HUD(root, config);
     this.input = new InputManager(
       canvas,
@@ -69,6 +77,14 @@ export class Game {
         (settings) => this.triggerLabCrash(settings),
         () => this.restart(),
         config.crashLabMode,
+      );
+      new NpcLab(
+        root,
+        (settings) => {
+          this.npcInspectionActive = settings.active;
+          this.npcs.setLab(settings.active, settings.type, settings.pose, settings.fall);
+        },
+        config.npcLabMode,
       );
     }
     this.origin = new CameraRelativeOrigin(config.rebaseDistance);
@@ -94,7 +110,8 @@ export class Game {
             ? this.input.state
             : this.replay.sample(this.input.state);
           this.simulationInput = replayInput;
-          this.physics.step(delta, replayInput);
+          if (!this.npcInspectionActive) this.physics.step(delta, replayInput);
+          this.npcs.step(delta, this.physics.state);
           if (
             !this.physics.state.crashed &&
             !this.physics.state.airborne &&
@@ -134,6 +151,39 @@ export class Game {
             }
           }
           if (
+            !this.npcInspectionActive &&
+            !this.physics.state.crashed &&
+            this.physics.canCollide()
+          ) {
+            const npcHit = this.npcs.queryPlayerContact(this.physics.state);
+            if (npcHit) {
+              const state = this.physics.state;
+              const context: ImpactContext = {
+                seed: this.config.seed,
+                obstacleId: 0x4e500000 + npcHit.npc.slot * 4096 + npcHit.npc.generation,
+                obstacleType: 'rock',
+                obstacleRadius: 0.66,
+                speed: npcHit.relativeSpeed,
+                velocityX: state.velocityX - npcHit.npc.velocityX,
+                velocityY: state.velocityY - npcHit.npc.velocityY,
+                facing: state.facing,
+                carve: state.carve,
+                airborneHeight: state.airborneHeight,
+                normalX: npcHit.normalX,
+                normalY: npcHit.normalY,
+                contactX: npcHit.npc.x + npcHit.normalX * 0.66,
+                contactY: npcHit.npc.y + npcHit.normalY * 0.66,
+                contactOffset: npcHit.glancing ? Math.sign(state.carve || 1) * 0.78 : 0,
+              };
+              const reaction = selectCrashReaction(context);
+              if (npcHit.severity > 0.62 && reaction.outcome === 'crash') {
+                this.physics.beginCrash(context, reaction);
+              } else {
+                this.physics.applyMinorImpact(context, reaction);
+              }
+            }
+          }
+          if (
             this.physics.state.crashed &&
             !this.crashPromptShown &&
             this.physics.state.crash.elapsed >= this.physics.state.crash.duration
@@ -163,6 +213,7 @@ export class Game {
     this.crashOverlay.hide();
     this.crashPromptShown = false;
     this.renderer.clearImpactDebug();
+    this.npcs.reset(this.physics.state);
   }
 
   private setPaused(paused: boolean): void {
@@ -216,6 +267,7 @@ export class Game {
 
   async start(): Promise<void> {
     await this.renderer.initialize();
+    this.npcs.reset(this.physics.state);
     document.body.classList.add('ready');
     this.loop.start();
   }
@@ -224,13 +276,14 @@ export class Game {
     const state = this.physics.state;
     this.origin.update(state.position);
     const snapshot = this.metrics.push(frameMs);
-    this.renderer.draw(state, this.simulationInput, this.origin.origin);
+    this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
     this.hud.update(
       state,
       snapshot,
       this.config,
       this.renderer.drawCalls,
       this.renderer.visibleFeatureEstimate,
+      this.npcs.metrics,
     );
     globalThis.__POWDERLINE_METRICS__ = {
       ...snapshot,
@@ -249,6 +302,9 @@ export class Game {
       trackSamples: this.renderer.trackSampleCount,
       paused: String(this.paused),
       gamepad: String(this.input.controllerConnected),
+      npcActive: this.npcs.metrics.active,
+      npcRecycled: this.npcs.metrics.recycled,
+      npcSimulationMs: this.npcs.metrics.simulationMs,
     };
   }
 }

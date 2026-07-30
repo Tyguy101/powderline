@@ -74,9 +74,11 @@ Cloudflare Workers are no longer part of development or deployment.
 - Controller top face button: restart after a crash
 - `F3`: metrics overlay
 - `F4`: development crash laboratory
+- `F5`: development NPC laboratory
 - Development builds or `?dev=1`: `G` opens the pose inspector
 - `?dev=1&cameraTest=1`: procedural scale markers for camera evaluation
 - `?dev=1&crashLab=1`: collision visualization and controlled impact testing
+- `?dev=1&npcLab=1`: controlled NPC rig, carve, fall, and recovery gallery
 
 ## Verification and measurement
 
@@ -108,6 +110,10 @@ The default production build currently includes:
 - Standing, braking, and manually controlled tuck speeds
 - Turn sharpness that builds while steering is held
 - Deterministically generated shader-drawn trees, rocks, and red launch ramps
+- Three deterministic shader-drawn mountain-user rigs: a tucked speed skier,
+  upright snowplow beginner, and sideways snowboarder. A fixed pool keeps three
+  to five active (three on low/mobile quality), with seeded visual variation, avoidance, passing,
+  falls, recovery, snowboard ramp hops, and player/NPC/NPC collision reactions.
 - CPU circle collisions with minor impacts, stumbles, and full crashes
 - Four condition-driven crash families with tree/rock-specific variations,
   impact snow, sliding marks, equipment motion, camera shake, and quick restart
@@ -116,7 +122,7 @@ The default production build currently includes:
 - A fixed-size GPU instanced circular trail buffer with twin ski grooves,
   carve-strength marks, fading spray, powder shading, and landing bursts
 - Deterministic replay serialization and playback
-- Pose, camera-scale, collision, and crash-laboratory development tools
+- Pose, camera-scale, collision, crash-laboratory, and NPC-laboratory tools
 - F3 metrics, automated tests, screenshot/capture tools, and desktop/mobile
   Playwright benchmarks
 
@@ -129,7 +135,8 @@ That work remains preserved on the
 allocate, update, relax, or sample that persistent texture.
 
 The current restored benchmark baseline is approximately 60 FPS on both the
-desktop and mobile automated profiles, with four normal gameplay draw calls.
+desktop and mobile automated profiles. The NPC population adds one shared
+instanced draw call, bringing normal gameplay to five draw calls.
 
 Planned later milestones include expanded obstacle variety, tricks and
 distance/trick scoring, additional ramp and landing behavior, dynamic quality

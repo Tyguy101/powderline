@@ -23,6 +23,8 @@ import type { CrashReaction, ImpactContext } from '../simulation/CrashReaction';
 import { createCrashTrailShader } from './shaders/crashTrail';
 import { createTreeForegroundShader } from './shaders/treeForeground';
 import { TrackTrailBuffer } from './TrackTrailBuffer';
+import { NpcRenderer } from './NpcRenderer';
+import type { NpcState } from '../simulation/NpcSystem';
 
 const BASE_VIEW_HEIGHT = 80;
 
@@ -38,6 +40,7 @@ export class GameRenderer {
   private readonly crashTrail;
   private readonly treeForeground;
   private readonly tracks = new TrackTrailBuffer();
+  private readonly npcs = new NpcRenderer();
   private readonly snowMesh: Mesh;
   private readonly markerMesh: Mesh;
   private readonly featureMesh: Mesh;
@@ -86,6 +89,7 @@ export class GameRenderer {
     this.featureMesh.position.z = 0.25;
     this.scene.add(this.featureMesh);
     this.scene.add(this.tracks.mesh);
+    this.scene.add(this.npcs.mesh);
     this.crashTrailMesh = new Mesh(new PlaneGeometry(1, 1), this.crashTrail.material);
     this.crashTrailMesh.position.z = 0.38;
     this.crashTrailMesh.visible = false;
@@ -124,6 +128,7 @@ export class GameRenderer {
     state: Readonly<SkiState>,
     input: Readonly<InputState>,
     origin: Readonly<WorldPosition>,
+    npcs: readonly Readonly<NpcState>[],
   ): void {
     resolveSkierPose(state, input, this.poseOverride, this.pose);
     const pose = this.pose;
@@ -134,6 +139,7 @@ export class GameRenderer {
     this.features.worldX.value = this.cameraWorldX;
     this.features.worldY.value = this.cameraWorldY;
     this.tracks.updateCamera(this.cameraWorldX, this.cameraWorldY);
+    this.npcs.update(npcs, this.cameraWorldX, this.cameraWorldY);
     this.treeForeground.worldX.value = this.cameraWorldX;
     this.treeForeground.worldY.value = this.cameraWorldY;
     this.skier.lean.value = pose.lean;
@@ -257,7 +263,7 @@ export class GameRenderer {
   }
 
   get drawCalls(): number {
-    return 4 + Number(this.treeForegroundMesh.visible) + Number(this.crashTrailMesh.visible) +
+    return 5 + Number(this.treeForegroundMesh.visible) + Number(this.crashTrailMesh.visible) +
       Number(this.markersVisible) +
       Number(this.collisionDebugMesh.visible);
   }

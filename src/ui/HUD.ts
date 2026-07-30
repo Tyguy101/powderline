@@ -2,6 +2,7 @@ import type { MetricsSnapshot } from '../instrumentation/FrameMetrics';
 import type { SkiState } from '../simulation/SkiPhysics';
 import type { GameConfig } from '../app/config';
 import { BUILD_ID } from '../app/build';
+import type { NpcMetrics } from '../simulation/NpcSystem';
 
 export class HUD {
   private readonly distance: HTMLElement;
@@ -75,6 +76,7 @@ export class HUD {
     config: GameConfig,
     drawCalls: number,
     visibleFeatures: number,
+    npcMetrics: Readonly<NpcMetrics>,
   ): void {
     this.distance.textContent = `${Math.floor(state.position.y)} m`;
     this.speed.textContent = `${Math.round(Math.hypot(state.velocityX, state.velocityY) * 3.6)} km/h`;
@@ -88,6 +90,8 @@ SIM <em>60 Hz fixed</em>
 SUBMIT <em>browser timed</em>
 DRAWS <em>${drawCalls}</em>
 FEATURES <em>~${visibleFeatures} visible</em>
+NPCS <em>${npcMetrics.active} / 5 active</em>
+NPC SIM <em>${npcMetrics.simulationMs.toFixed(3)} ms</em>
 CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>
