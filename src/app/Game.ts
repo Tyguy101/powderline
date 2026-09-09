@@ -253,6 +253,13 @@ export class Game {
     if (paused) this.input.resetTransientState();
     else this.loop.resetClock();
     this.hud.setPaused(paused);
+    // Publish the transition before a lifecycle suspension stops RAF entirely.
+    // This keeps diagnostics and automated freeze checks synchronized with the
+    // actual fixed-step state instead of the last throttled metrics snapshot.
+    this.publicMetrics.paused = String(paused);
+    this.publicMetrics.worldX = this.physics.state.position.x;
+    this.publicMetrics.worldY = this.physics.state.position.y;
+    globalThis.__POWDERLINE_METRICS__ = this.publicMetrics;
   }
 
   private pauseForLifecycle(reason: LifecyclePauseReason): void {
