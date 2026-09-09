@@ -10,11 +10,12 @@ meaningful milestone.
 ## Code and deployment identity
 
 - Git branch: `main`
-- Git SHA: `8b5bc8a` (full SHA: `8b5bc8af594b04087fe989984862778d136648a0`)
+- Git SHA (migration implementation): `8b5bc8a` (full SHA: `8b5bc8af594b04087fe989984862778d136648a0`)
+- Current branch tip: `faa2fc1c0c113cbab8ab5186e0f4339dc669bdd7` (documentation and deployment follow-ups)
 - GitHub: https://github.com/Tyguy101/powderline
 - Production: https://powderline-lake.vercel.app/
-- Vercel build ID/commit: pending automatic production deployment; verify against
-  `8b5bc8a` before release sign-off
+- Vercel build ID/commit: verified over HTTPS with Playwright during this handoff;
+  the page exposed build `faa2fc1c`, matching the then-current branch tip.
 - Deterministic seed: `424242` for benchmark smoke/replay checks
 
 ## Material changes
@@ -35,8 +36,8 @@ meaningful milestone.
 ## Review focus and limitations
 
 - Independently verify GitHub `main` matches the local migration SHA.
-- Independently verify Vercel production shows the same eight-character build
-  identifier and that the canvas initializes over HTTPS.
+- Re-check the eight-character build identifier after subsequent pushes and
+  confirm that the canvas initializes over HTTPS.
 - Physical-device FPS and WebGPU adapter behavior still need a real desktop and
   phone/tablet pass; headless browser measurements are not a substitute.
 - Sentry project/organization linkage is not verifiable in this session because
