@@ -2,13 +2,16 @@
 
 ## Current milestone
 
-Mobile foundation and iOS packaging feasibility. No gameplay systems or skiing
-physics were changed. The next planned product milestone is Menu / App Shell.
+Landscape mobile physical-playability experiment. This iteration tests a camera
+composition designed for landscape and independent two-thumb controls. It does
+not lock orientation, remove portrait, alter skiing physics, or declare the
+mobile control question solved. Physical-device feedback remains the decision
+gate before the next gameplay milestone.
 
 ## Code and deployment identity
 
-- Starting Git SHA: `f855329a9088671021b6eea49c98f911a3a20b15`
-- Ending implementation SHA: `5270f9db85d502777341ece3af6172fa00699505`
+- Starting Git SHA: `8e36e1efbe0649372d0113bf3e06e2778e3feb1c`
+- Ending implementation SHA: `483ba6a8aa2999ecc59fcf9408a8439dbd1434de`
 - Git branch: `main`; the documentation handoff commit is the direct successor
   to the implementation SHA and its final tip must be verified with
   `git rev-parse HEAD`.
@@ -18,6 +21,27 @@ physics were changed. The next planned product milestone is Menu / App Shell.
 
 ## Mobile systems changed
 
+- Coarse-pointer landscape viewports now use an 88-world-unit vertical camera,
+  with the skier targeting 15–20% down from the top after the framing settles.
+  The measured downhill view is about 70 m: approximately 5.9 s at initial speed,
+  3.2 s at standing speed, and 2.1 s at maximum tuck speed.
+- The left 70% of the canvas is an invisible relative steering zone. Each touch
+  establishes its own neutral point; an 8 px dead zone suppresses drift, a curved
+  analog response reaches a hard carve at a viewport-scaled 76–112 px, vertical
+  movement is ignored, and near-neutral movement gently recenters the origin.
+- Large safe-area-aware hold controls on the right independently activate BRAKE
+  and TUCK. A dedicated steering pointer and action pointer can change and release
+  without stealing one another. Dragging the action finger away returns to neutral;
+  sliding directly between controls switches modes without toggling.
+- Keyboard, mouse-drag, gamepad, normalized replay input, deterministic 60 Hz
+  simulation, skiing physics, collisions, NPCs, and portrait camera behavior are
+  unchanged.
+- Development A/B options preserve the old touch gesture (`?dev=1&mobileControls=drag`)
+  and old mobile camera (`?dev=1&mobileCamera=legacy`). `?dev=1&touchDebug=1`
+  visualizes touch origin/vector/state; F3 exposes camera and input diagnostics.
+
+The lifecycle and compatibility foundation from the prior milestone remains:
+
 - Added a reusable lifecycle manager for visibility, page hide/show, focus loss,
   orientation, and visual-viewport changes.
 - Backgrounding now clears held input, pauses the run, stops the animation/render
@@ -25,8 +49,7 @@ physics were changed. The next planned product milestone is Menu / App Shell.
   A 30-second interruption cannot become a catch-up burst.
 - Manual pause leaves the lightweight input loop available but renders one frozen
   frame rather than continuously submitting the WebGPU scene.
-- Touch uses one owning pointer ID, ignores secondary-pointer interference, and
-  clears safely on pointer cancellation, lost capture, and lifecycle loss.
+- Touch pointers clear safely on cancellation, lost capture, and lifecycle loss.
 - Keyboard, pointer, touch, gamepad, and replay still converge on the same
   normalized `{ steer, brake, tuck }` fixed-step input. Physics and replay format
   are unchanged.
@@ -53,9 +76,13 @@ emulation. It is not iOS or physical-device evidence.
 | Narrow landscape 667×375 → 375×667 | 2 | 1000×562 (0.56 MP) | 562×1000 (0.56 MP) | Pass |
 
 Every profile passed canvas fill, one-megapixel policy, scrolling suppression,
-touch help, 44 px controls, pause freeze/resume, background return, live rotation,
-rotation while paused, and browser-console review. The separate unsupported-
-WebGPU case showed a visible useful compatibility card.
+touch help, 44 px pause/resume controls, 70+ px BRAKE/TUCK controls, pause
+freeze/resume, background return, live rotation, rotation while paused, and
+browser-console review. The QA sequence also proved simultaneous steering +
+BRAKE, steering direction changes while braking, BRAKE → TUCK while steering,
+independent finger release, and vertical steering-thumb drift. Landscape profiles
+activated the 88-unit camera and measured the skier in the 15–21% target band.
+The separate unsupported-WebGPU case showed a visible useful compatibility card.
 
 ## Performance before and after
 
@@ -67,6 +94,11 @@ Same-machine 1440×900 production benchmark evidence:
   59.91 FPS, 16.70 ms median, 16.90 ms P95, zero >50 ms frames, about 1.00 MP.
 - After simulated phone 390×844 low quality: 60.12 FPS, 16.70 ms median,
   16.90 ms P95, zero >25 ms frames, 0.33 MP.
+- Two-thumb experiment desktop 1440×900: 59.90 FPS, 16.70 ms median, 17.00 ms
+  P95, zero >50 ms frames, about 1.00 MP.
+- Two-thumb experiment simulated phone 390×844 low quality: 59.40 FPS, 16.70 ms
+  median and 17.00 ms P95. One isolated 100 ms frame occurred in headless Chrome;
+  steady-state percentiles did not regress.
 
 The mobile foundation showed no measurable steady-state regression. CPU
 simulation remained below 0.15 ms average in these runs. These are headless
@@ -75,7 +107,7 @@ Chrome measurements, not mobile GPU, thermal, or battery evidence.
 ## Validation completed
 
 - `npm run lint`
-- `npm test` — 31 tests in 10 files
+- `npm test` — 33 tests in 10 files
 - `npm run build`
 - `npm run qa:mobile` — four profiles plus unsupported-WebGPU case
 - Desktop 1440×900 and simulated phone 390×844 benchmarks
@@ -97,6 +129,19 @@ The Windows helper `npm run setup:https` requires mkcert (not installed on the
 development PC during this milestone), creates an ignored LAN-valid certificate,
 and documents the iOS root-CA trust step. The untrusted Vite certificate remains
 a desktop fallback.
+
+### Tyler's focused landscape play check
+
+1. Hold a long left carve in neutral.
+2. Hold a long right carve.
+3. Carve while holding TUCK.
+4. Carve while holding BRAKE.
+5. Rapidly change directions while tucked.
+6. Brake suddenly while already turning.
+7. Switch BRAKE → TUCK while continuously steering.
+8. Judge whether the skier/camera provides enough downhill warning in landscape.
+9. Judge whether the skier is too small, too large, too high, or too low.
+10. Note whether either thumb obscures important gameplay.
 
 ## iOS feasibility outcome
 

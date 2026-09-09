@@ -82,9 +82,11 @@ the address to share.
 - `D` / Right Arrow: carve right
 - `W` / Up Arrow: brake
 - `S` / Down Arrow: speed tuck
-- Drag horizontally: farther displacement produces a sharper carve
-- Drag upward: brake; combine with left/right for a braking turn
-- Drag downward: speed tuck; combine with left/right for a slower tuck turn
+- Mouse drag horizontally: farther displacement produces a sharper carve
+- Touch: place the left thumb anywhere in the left steering zone and move it
+  horizontally for analog carving; vertical thumb drift does not change speed
+- Touch: hold the right-side `BRAKE` or `TUCK` control while steering with the
+  left thumb; releasing the button returns to neutral speed input
 - `R`: restart after a crash
 - `P` / Escape: pause or resume
 - Enter / Space: menu confirmation
@@ -100,6 +102,10 @@ the address to share.
 - `?dev=1&cameraTest=1`: procedural scale markers for camera evaluation
 - `?dev=1&crashLab=1`: collision visualization and controlled impact testing
 - `?dev=1&npcLab=1`: controlled NPC rig, carve, fall, and recovery gallery
+- `?dev=1&touchDebug=1`: visualize the steering origin, thumb vector, normalized
+  steering value, action state, camera scale, and skier screen position
+- `?dev=1&mobileControls=drag`: A/B test the previous combined touch-drag scheme
+- `?dev=1&mobileCamera=legacy`: A/B test the previous mobile camera composition
 
 ## Verification and measurement
 
@@ -131,7 +137,9 @@ The default production build currently includes:
 - WebGPU and Three.js TSL rendering with no imported game art
 - A shader-drawn skier with interpolated neutral, carve, traverse, brake, tuck,
   airborne, landing, crash, and idle poses
-- A wide, camera-relative downhill view with smooth look-ahead and origin rebasing
+- A wide, camera-relative downhill view with smooth look-ahead and origin
+  rebasing. Coarse-pointer landscape play uses an experimental 88-unit camera
+  scale and places the skier near the top fifth of the viewport for more warning.
 - Deterministic fixed-step simulation at 60 Hz
 - Keyboard, pointer, mouse-drag, touch, and standard-layout gamepad controls
   with eight-direction input
@@ -156,8 +164,9 @@ The default production build currently includes:
 - Pose, camera-scale, collision, crash-laboratory, and NPC-laboratory tools
 - F3 metrics, automated tests, screenshot/capture tools, and desktop/mobile
   Playwright benchmarks
-- Safe-area-aware phone/tablet HUD, touch pause/resume, single-pointer gesture
-  ownership, and predictable background/orientation recovery without catch-up
+- Safe-area-aware phone/tablet HUD, touch pause/resume, independent left steering
+  and right action pointer ownership, and predictable background/orientation
+  recovery without catch-up
 - Player-facing WebGPU startup diagnostics instead of a blank failure screen
 
 The lightweight trail buffer is the production track implementation. A toroidal
