@@ -85,6 +85,7 @@ button, kbd { font: inherit; }
 .debug.visible { display: block; }
 .debug b { display: block; color: white; letter-spacing: .12em; margin-bottom: 6px; }
 .debug em { float: right; color: white; font-style: normal; }
+.performance-ui-disabled > :not(.game-shell) { display: none !important; }
 
 .pose-gallery {
   position: fixed; z-index: 6; left: 24px; top: 78px; display: none; width: min(330px, calc(100vw - 48px));

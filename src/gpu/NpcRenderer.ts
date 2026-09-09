@@ -21,6 +21,7 @@ import {
   sin,
   smoothstep,
   storage,
+  uniform,
   uv,
   varying,
   vec2,
@@ -57,47 +58,62 @@ function typeIndex(type: NpcType): number {
   return type === 'speed-skier' ? 0 : type === 'beginner-skier' ? 1 : 2;
 }
 
-function paletteColor(index: Node<'float'>): Node<'vec3'> {
-  let color: Node<'vec3'> = vec3(0.9, 0.16, 0.13);
-  color = mix(color, vec3(1, 0.43, 0.08), typeMask(index, 1));
-  color = mix(color, vec3(0.98, 0.75, 0.08), typeMask(index, 2));
-  color = mix(color, vec3(0.04, 0.65, 0.53), typeMask(index, 3));
-  color = mix(color, vec3(0.12, 0.38, 0.9), typeMask(index, 4));
-  color = mix(color, vec3(0.61, 0.2, 0.82), typeMask(index, 5));
-  return color;
-}
+const PALETTE = new Float32Array([
+  0.9, 0.16, 0.13,
+  1, 0.43, 0.08,
+  0.98, 0.75, 0.08,
+  0.04, 0.65, 0.53,
+  0.12, 0.38, 0.9,
+  0.61, 0.2, 0.82,
+]);
 
 export class NpcRenderer {
   readonly mesh: InstancedMesh;
   private readonly poseData = new Float32Array(MAX_NPCS * 4);
   private readonly motionData = new Float32Array(MAX_NPCS * 4);
-  private readonly clothingData = new Float32Array(MAX_NPCS * 4);
+  private readonly clothingAData = new Float32Array(MAX_NPCS * 4);
+  private readonly clothingBData = new Float32Array(MAX_NPCS * 4);
+  private readonly clothingCData = new Float32Array(MAX_NPCS * 4);
   private readonly poseAttribute: StorageInstancedBufferAttribute;
   private readonly motionAttribute: StorageInstancedBufferAttribute;
-  private readonly clothingAttribute: StorageInstancedBufferAttribute;
+  private readonly clothingAAttribute: StorageInstancedBufferAttribute;
+  private readonly clothingBAttribute: StorageInstancedBufferAttribute;
+  private readonly clothingCAttribute: StorageInstancedBufferAttribute;
   private readonly matrix = new Matrix4();
   private readonly position = new Vector3();
   private readonly rotation = new Quaternion();
   private readonly scale = new Vector3();
   private readonly axis = new Vector3(0, 0, 1);
+  private readonly shadowsEnabled = uniform(1);
+  private readonly effectsEnabled = uniform(1);
 
   constructor() {
     this.poseAttribute = new StorageInstancedBufferAttribute(this.poseData, 4);
     this.motionAttribute = new StorageInstancedBufferAttribute(this.motionData, 4);
-    this.clothingAttribute = new StorageInstancedBufferAttribute(this.clothingData, 4);
+    this.clothingAAttribute = new StorageInstancedBufferAttribute(this.clothingAData, 4);
+    this.clothingBAttribute = new StorageInstancedBufferAttribute(this.clothingBData, 4);
+    this.clothingCAttribute = new StorageInstancedBufferAttribute(this.clothingCData, 4);
     this.poseAttribute.setUsage(DynamicDrawUsage);
     this.motionAttribute.setUsage(DynamicDrawUsage);
-    this.clothingAttribute.setUsage(DynamicDrawUsage);
+    this.clothingAAttribute.setUsage(DynamicDrawUsage);
+    this.clothingBAttribute.setUsage(DynamicDrawUsage);
+    this.clothingCAttribute.setUsage(DynamicDrawUsage);
     const pose = varying(
       storage(this.poseAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
     ) as Node<'vec4'>;
     const motion = varying(
       storage(this.motionAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
     ) as Node<'vec4'>;
-    const clothing = varying(
-      storage(this.clothingAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
+    const clothingA = varying(
+      storage(this.clothingAAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
     ) as Node<'vec4'>;
-    const p = uv().sub(0.5);
+    const clothingB = varying(
+      storage(this.clothingBAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
+    ) as Node<'vec4'>;
+    const clothingC = varying(
+      storage(this.clothingCAttribute, 'vec4', MAX_NPCS).toReadOnly().element(instanceIndex),
+    ) as Node<'vec4'>;
+    const p = uv().sub(0.5).mul(vec2(2.65 / 3.7, 3.25 / 4.5));
     const speedMask = typeMask(pose.x, 0);
     const beginnerMask = typeMask(pose.x, 1);
     const boarderMask = typeMask(pose.x, 2);
@@ -211,17 +227,18 @@ export class NpcRenderer {
     ).mul(skierMask);
     const equipment = max(max(skis, snowboard), poles);
     const shadow = ellipse(p, vec2(0, -0.31), vec2(float(0.22).add(abs(carve).mul(0.05)), 0.035))
-      .mul(float(1).sub(clamp(airborne, 0, 1)));
+      .mul(float(1).sub(clamp(airborne, 0, 1)))
+      .mul(this.shadowsEnabled);
     const powder = ellipse(
       p,
       vec2(carve.mul(-0.16), -0.29),
       vec2(float(0.09).add(abs(carve).mul(0.09)), 0.055),
-    ).mul(abs(carve).mul(0.65));
+    ).mul(abs(carve).mul(0.65)).mul(this.effectsEnabled);
 
-    const hatColor = paletteColor(clothing.x);
-    const topColor = paletteColor(clothing.y);
-    const bottomColor = paletteColor(clothing.z);
-    const accessoryColor = paletteColor(clothing.w);
+    const hatColor = vec3(clothingA.x, clothingA.y, clothingA.z);
+    const topColor = vec3(clothingA.w, clothingB.x, clothingB.y);
+    const bottomColor = vec3(clothingB.z, clothingB.w, clothingC.x);
+    const accessoryColor = vec3(clothingC.y, clothingC.z, clothingC.w);
     let color: Node<'vec3'> = vec3(0.12, 0.24, 0.27);
     color = mix(color, vec3(0.83, 0.91, 0.94), shadow.mul(0.22));
     color = mix(color, bottomColor, legs);
@@ -241,13 +258,25 @@ export class NpcRenderer {
     material.opacityNode = alpha;
     material.transparent = true;
     material.depthWrite = false;
-    this.mesh = new InstancedMesh(new PlaneGeometry(3.7, 4.5), material, MAX_NPCS);
+    // The SDF silhouette fits inside p.x ±0.35 / p.y ±0.36. Remapping UVs
+    // into the original coordinate space lets this tighter quad preserve the
+    // exact world-space character size while shading ~46% fewer empty pixels.
+    this.mesh = new InstancedMesh(new PlaneGeometry(2.65, 3.25), material, MAX_NPCS);
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.position.z = 0.44;
   }
 
-  update(states: readonly Readonly<NpcState>[], cameraX: number, cameraY: number): void {
+  update(
+    states: readonly Readonly<NpcState>[],
+    cameraX: number,
+    cameraY: number,
+    viewWidth: number,
+    viewHeight: number,
+    disabled: ReadonlySet<string>,
+  ): void {
+    this.shadowsEnabled.value = disabled.has('npcShadows') ? 0 : 1;
+    this.effectsEnabled.value = disabled.has('npcEffects') ? 0 : 1;
     for (let index = 0; index < MAX_NPCS; index += 1) {
       const npc = states[index]!;
       const offset = index * 4;
@@ -262,10 +291,22 @@ export class NpcRenderer {
       this.motionData[offset + 2] =
         npc.fall === 'stumble' ? 1 : npc.fall === 'spin' ? 2 : npc.fall === 'tumble' ? 3 : 0;
       this.motionData[offset + 3] = npc.airborne;
-      this.clothingData[offset] = npc.hatColor;
-      this.clothingData[offset + 1] = npc.topColor;
-      this.clothingData[offset + 2] = npc.bottomColor;
-      this.clothingData[offset + 3] = npc.accessoryColor;
+      const hat = npc.hatColor * 3;
+      const top = npc.topColor * 3;
+      const bottom = npc.bottomColor * 3;
+      const accessory = npc.accessoryColor * 3;
+      this.clothingAData[offset] = PALETTE[hat] ?? 0;
+      this.clothingAData[offset + 1] = PALETTE[hat + 1] ?? 0;
+      this.clothingAData[offset + 2] = PALETTE[hat + 2] ?? 0;
+      this.clothingAData[offset + 3] = PALETTE[top] ?? 0;
+      this.clothingBData[offset] = PALETTE[top + 1] ?? 0;
+      this.clothingBData[offset + 1] = PALETTE[top + 2] ?? 0;
+      this.clothingBData[offset + 2] = PALETTE[bottom] ?? 0;
+      this.clothingBData[offset + 3] = PALETTE[bottom + 1] ?? 0;
+      this.clothingCData[offset] = PALETTE[bottom + 2] ?? 0;
+      this.clothingCData[offset + 1] = PALETTE[accessory] ?? 0;
+      this.clothingCData[offset + 2] = PALETTE[accessory + 1] ?? 0;
+      this.clothingCData[offset + 3] = PALETTE[accessory + 2] ?? 0;
       this.position.set(npc.x - cameraX, cameraY - npc.y - npc.airborne * 1.25, 0);
       const fallRotation = npc.fall === 'spin'
         ? npc.fallTime * 5.2
@@ -273,7 +314,13 @@ export class NpcRenderer {
           ? npc.fallTime * 3.6
           : npc.facing * 0.1;
       this.rotation.setFromAxisAngle(this.axis, fallRotation);
-      const visible = npc.active ? 1 : 0;
+      const typeDisabled =
+        (npc.type === 'speed-skier' && disabled.has('npcSpeed')) ||
+        (npc.type === 'beginner-skier' && disabled.has('npcBeginner')) ||
+        (npc.type === 'snowboarder' && disabled.has('npcSnowboard'));
+      const inView = Math.abs(npc.x - cameraX) < viewWidth * 0.54 + 2 &&
+        Math.abs(npc.y - cameraY) < viewHeight * 0.54 + 2;
+      const visible = npc.active && inView && !typeDisabled ? 1 : 0;
       this.scale.set(visible, visible, 1);
       this.matrix.compose(this.position, this.rotation, this.scale);
       this.mesh.setMatrixAt(index, this.matrix);
@@ -281,6 +328,8 @@ export class NpcRenderer {
     this.mesh.instanceMatrix.needsUpdate = true;
     this.poseAttribute.needsUpdate = true;
     this.motionAttribute.needsUpdate = true;
-    this.clothingAttribute.needsUpdate = true;
+    this.clothingAAttribute.needsUpdate = true;
+    this.clothingBAttribute.needsUpdate = true;
+    this.clothingCAttribute.needsUpdate = true;
   }
 }

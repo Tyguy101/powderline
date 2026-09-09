@@ -119,6 +119,7 @@ export class TrackTrailBuffer {
     this.mesh.instanceMatrix.setUsage(DynamicDrawUsage);
     this.mesh.frustumCulled = false;
     this.mesh.position.z = 0.32;
+    this.mesh.count = 0;
   }
 
   record(state: Readonly<SkiState>, delta: number): void {
@@ -163,14 +164,19 @@ export class TrackTrailBuffer {
       this.instanceScale,
     );
     this.mesh.setMatrixAt(this.writeIndex, this.instanceMatrix);
+    this.mesh.instanceMatrix.clearUpdateRanges();
+    this.mesh.instanceMatrix.addUpdateRange(this.writeIndex * 16, 16);
     this.mesh.instanceMatrix.needsUpdate = true;
     this.styleData[offset] = carve;
     this.styleData[offset + 1] = this.elapsed;
     this.styleData[offset + 2] = landing;
     this.styleData[offset + 3] = 1;
+    this.styleAttribute.clearUpdateRanges();
+    this.styleAttribute.addUpdateRange(offset, 4);
     this.styleAttribute.needsUpdate = true;
     this.writeIndex = (this.writeIndex + 1) % TRAIL_CAPACITY;
     this.samples = Math.min(TRAIL_CAPACITY, this.samples + 1);
+    this.mesh.count = this.samples;
     this.previousX = state.position.x;
     this.previousY = state.position.y;
   }
@@ -192,6 +198,7 @@ export class TrackTrailBuffer {
     this.hasPrevious = true;
     this.landingWasActive = false;
     this.samples = 0;
+    this.mesh.count = 0;
   }
 
   get sampleCount(): number {

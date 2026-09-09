@@ -93,4 +93,43 @@ describe('NpcSystem', () => {
     expect(npc.fall).toBe('none');
     expect(npc.recovery).toBeGreaterThan(0);
   });
+
+  it('preserves the golden fixed-step route and NPC outcomes', () => {
+    const player = new SkiPhysics();
+    const system = new NpcSystem(91423);
+    system.reset(player.state);
+    for (let frame = 0; frame < 1200; frame += 1) {
+      const steer = frame < 300 ? 0.65 : frame < 600 ? -0.45 : frame < 900 ? 0.2 : 0;
+      player.step(1 / 60, {
+        steer,
+        brake: frame >= 900 && frame < 980,
+        tuck: frame >= 600 && frame < 850,
+      });
+      system.step(1 / 60, player.state);
+    }
+    expect([
+      player.state.position.x,
+      player.state.position.y,
+      player.state.velocityX,
+      player.state.velocityY,
+    ].map((value) => Number(value.toFixed(4)))).toEqual([
+      36.8513, 417.4507, 0.0031, 21.7792,
+    ]);
+    expect(system.states.map((npc) => [
+      npc.generation,
+      npc.type,
+      Number(npc.x.toFixed(3)),
+      Number(npc.y.toFixed(3)),
+      npc.fall,
+      npc.hatColor,
+      npc.topColor,
+      npc.bottomColor,
+    ])).toEqual([
+      [1, 'beginner-skier', 44.998, 436.189, 'none', 1, 5, 2],
+      [1, 'speed-skier', 38.249, 451.175, 'none', 0, 5, 3],
+      [0, 'snowboarder', 7.253, 393.504, 'spin', 4, 5, 5],
+      [0, 'snowboarder', -32.892, 83.957, 'none', 1, 3, 5],
+      [0, 'snowboarder', -8.252, 373.584, 'none', 0, 2, 3],
+    ]);
+  });
 });

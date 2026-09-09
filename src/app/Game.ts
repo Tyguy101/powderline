@@ -16,6 +16,7 @@ import { NpcLab } from '../ui/NpcLab';
 import { NpcSystem } from '../simulation/NpcSystem';
 import { BUILD_ID } from './build';
 import type { GameConfig } from './config';
+import { TimingCounter } from '../instrumentation/PerformanceCounters';
 
 export class Game {
   private readonly physics = new SkiPhysics();
@@ -33,6 +34,11 @@ export class Game {
   private npcInspectionActive = false;
   private crashPromptShown = false;
   private paused = false;
+  private readonly simulationTiming = new TimingCounter();
+  private readonly collisionTiming = new TimingCounter();
+  private readonly trailTiming = new TimingCounter();
+  private readonly publicMetrics: Record<string, number | string> = {};
+  private metricsPublishCountdown = 0;
   private simulationInput: Readonly<InputState> = {
     steer: 0,
     brake: false,
@@ -48,7 +54,12 @@ export class Game {
       <div class="vignette"></div>
     </main>`;
     const canvas = root.querySelector<HTMLCanvasElement>('#game-canvas')!;
-    this.renderer = new GameRenderer(canvas, config.seed, config.cameraTestMode);
+    this.renderer = new GameRenderer(
+      canvas,
+      config.seed,
+      config.cameraTestMode,
+      config.performance,
+    );
     this.collision = new CollisionSystem(config.seed);
     this.replay = new ReplaySystem(config.seed, config.replay);
     this.npcs = new NpcSystem(
@@ -61,6 +72,7 @@ export class Game {
       (connected) => this.hud.setControllerConnected(connected),
     );
     this.crashOverlay = new CrashOverlay(root, () => this.restart());
+    root.classList.toggle('performance-ui-disabled', config.performance.disabled.has('ui'));
     if (config.developmentMode) {
       new PoseGallery(
         root,
@@ -95,6 +107,7 @@ export class Game {
       config.fixedStepSeconds,
       config.maxFrameSeconds,
       (delta) => {
+        const simulationStarted = performance.now();
         this.input.pollGamepads();
         if (this.input.consumePause()) this.setPaused(!this.paused);
         const confirm = this.input.consumeConfirm();
@@ -106,13 +119,17 @@ export class Game {
           this.restart();
         }
         if (!this.paused && !this.poseInspectionActive) {
-          const replayInput = this.physics.state.crashed
+          const replayInput = this.physics.state.crashed || this.config.performance.disabled.has('replay')
             ? this.input.state
             : this.replay.sample(this.input.state);
           this.simulationInput = replayInput;
           if (!this.npcInspectionActive) this.physics.step(delta, replayInput);
-          this.npcs.step(delta, this.physics.state);
+          if (!this.config.performance.disabled.has('npcSim')) {
+            this.npcs.step(delta, this.physics.state);
+          }
+          const collisionStarted = performance.now();
           if (
+            !this.config.performance.disabled.has('collisions') &&
             !this.physics.state.crashed &&
             !this.physics.state.airborne &&
             this.physics.canCollide()
@@ -151,6 +168,7 @@ export class Game {
             }
           }
           if (
+            !this.config.performance.disabled.has('collisions') &&
             !this.npcInspectionActive &&
             !this.physics.state.crashed &&
             this.physics.canCollide()
@@ -183,6 +201,7 @@ export class Game {
               }
             }
           }
+          this.collisionTiming.push(performance.now() - collisionStarted);
           if (
             this.physics.state.crashed &&
             !this.crashPromptShown &&
@@ -195,9 +214,14 @@ export class Game {
               this.physics.state.crash.family,
             );
           }
-          this.renderer.recordTrail(this.physics.state, delta);
+          if (!this.config.performance.disabled.has('trails')) {
+            const trailStarted = performance.now();
+            this.renderer.recordTrail(this.physics.state, delta);
+            this.trailTiming.push(performance.now() - trailStarted);
+          }
         }
         this.renderer.updateCamera(this.physics.state, delta);
+        this.simulationTiming.push(performance.now() - simulationStarted);
       },
       (_alpha, frameMs) => this.render(frameMs),
     );
@@ -277,16 +301,10 @@ export class Game {
     this.origin.update(state.position);
     const snapshot = this.metrics.push(frameMs);
     this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
-    this.hud.update(
-      state,
-      snapshot,
-      this.config,
-      this.renderer.drawCalls,
-      this.renderer.visibleFeatureEstimate,
-      this.npcs.metrics,
-    );
-    globalThis.__POWDERLINE_METRICS__ = {
-      ...snapshot,
+    this.metricsPublishCountdown -= 1;
+    if (this.metricsPublishCountdown <= 0) {
+      this.metricsPublishCountdown = 10;
+      Object.assign(this.publicMetrics, snapshot, {
       worldX: state.position.x,
       worldY: state.position.y,
       seed: this.config.seed,
@@ -305,7 +323,32 @@ export class Game {
       npcActive: this.npcs.metrics.active,
       npcRecycled: this.npcs.metrics.recycled,
       npcSimulationMs: this.npcs.metrics.simulationMs,
-    };
+      simulationAverageMs: this.simulationTiming.snapshot.averageMs,
+      collisionAverageMs: this.collisionTiming.snapshot.averageMs,
+      trailAverageMs: this.trailTiming.snapshot.averageMs,
+      renderPreparationAverageMs: this.renderer.preparationTiming.snapshot.averageMs,
+      npcRenderPreparationAverageMs: this.renderer.npcRenderTiming.snapshot.averageMs,
+      submissionCpuAverageMs: this.renderer.submissionTiming.snapshot.averageMs,
+      canvasPixelWidth: this.renderer.canvasPixelWidth,
+      canvasPixelHeight: this.renderer.canvasPixelHeight,
+      canvasPixels: this.renderer.canvasPixelWidth * this.renderer.canvasPixelHeight,
+      renderPixelRatio: this.renderer.pixelRatio,
+      devicePixelRatio,
+      disabledSubsystems: [...this.config.performance.disabled].join(',') || 'none',
+      fixedStepsLastFrame: this.loop.latestStepCount,
+      fixedStepsPeak: this.loop.peakStepCount,
+      });
+      globalThis.__POWDERLINE_METRICS__ = this.publicMetrics;
+    }
+    this.hud.update(
+      state,
+      snapshot,
+      this.config,
+      this.renderer.drawCalls,
+      this.renderer.visibleFeatureEstimate,
+      this.npcs.metrics,
+      this.publicMetrics,
+    );
   }
 }
 

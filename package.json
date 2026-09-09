@@ -14,11 +14,14 @@
     "benchmark": "tsx tools/benchmark/run-benchmark.ts",
     "benchmark:potato": "tsx tools/benchmark/run-benchmark.ts --quality=potato --viewport=1280x720",
     "benchmark:mobile": "tsx tools/benchmark/run-benchmark.ts --quality=low --viewport=390x844",
+    "benchmark:matrix": "tsx tools/benchmark/run-matrix.ts",
+    "benchmark:matrix:full": "tsx tools/benchmark/run-matrix.ts --full",
     "capture": "tsx tools/capture/capture.ts",
     "capture:crashes": "tsx tools/capture/crash-sequence.ts",
     "report": "tsx tools/benchmark/create-report.ts"
   },
   "dependencies": {
+    "@sentry/browser": "^10.73.0",
     "three": "0.185.1"
   },
   "devDependencies": {

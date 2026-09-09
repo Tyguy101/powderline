@@ -17,7 +17,6 @@ import type { SkiState } from '../simulation/SkiPhysics';
 import { createCameraMarkerShader } from './shaders/cameraMarkers';
 import { createSkierShader } from './shaders/skier';
 import { createSnowShader } from './shaders/snowBackground';
-import { createWorldFeatureShader } from './shaders/worldFeatures';
 import { createCollisionDebugShader } from './shaders/collisionDebug';
 import type { CrashReaction, ImpactContext } from '../simulation/CrashReaction';
 import { createCrashTrailShader } from './shaders/crashTrail';
@@ -25,6 +24,9 @@ import { createTreeForegroundShader } from './shaders/treeForeground';
 import { TrackTrailBuffer } from './TrackTrailBuffer';
 import { NpcRenderer } from './NpcRenderer';
 import type { NpcState } from '../simulation/NpcSystem';
+import type { PerformanceConfig } from '../app/config';
+import { TimingCounter } from '../instrumentation/PerformanceCounters';
+import { WorldFeatureRenderer } from './WorldFeatureRenderer';
 
 const BASE_VIEW_HEIGHT = 80;
 
@@ -34,7 +36,7 @@ export class GameRenderer {
   private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
   private readonly snow;
   private readonly markers;
-  private readonly features;
+  private readonly features: WorldFeatureRenderer;
   private readonly skier;
   private readonly collisionDebug;
   private readonly crashTrail;
@@ -43,7 +45,6 @@ export class GameRenderer {
   private readonly npcs = new NpcRenderer();
   private readonly snowMesh: Mesh;
   private readonly markerMesh: Mesh;
-  private readonly featureMesh: Mesh;
   private readonly skierMesh: Mesh;
   private readonly collisionDebugMesh: Mesh;
   private readonly crashTrailMesh: Mesh;
@@ -61,19 +62,28 @@ export class GameRenderer {
   private debugWorldY = 0;
   private debugContactWorldX = 0;
   private debugContactWorldY = 0;
+  private appliedPixelRatio = 1;
+  readonly preparationTiming = new TimingCounter();
+  readonly submissionTiming = new TimingCounter();
+  readonly npcRenderTiming = new TimingCounter();
 
   constructor(
     canvas: HTMLCanvasElement,
     seed: number,
     cameraTestMode: boolean,
+    private readonly performanceConfig: PerformanceConfig,
   ) {
-    this.renderer = new WebGPURenderer({ canvas, antialias: true, alpha: false });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5));
+    this.renderer = new WebGPURenderer({
+      canvas,
+      antialias: true,
+      alpha: false,
+      powerPreference: 'high-performance',
+    });
     this.camera.position.z = 2;
     this.markersVisible = cameraTestMode;
     this.snow = createSnowShader(seed);
     this.markers = createCameraMarkerShader(seed);
-    this.features = createWorldFeatureShader(seed);
+    this.features = new WorldFeatureRenderer(seed);
     this.skier = createSkierShader();
     this.collisionDebug = createCollisionDebugShader();
     this.crashTrail = createCrashTrailShader();
@@ -85,9 +95,7 @@ export class GameRenderer {
     this.markerMesh.position.z = 0;
     this.markerMesh.visible = this.markersVisible;
     this.scene.add(this.markerMesh);
-    this.featureMesh = new Mesh(new PlaneGeometry(1, 1), this.features.material);
-    this.featureMesh.position.z = 0.25;
-    this.scene.add(this.featureMesh);
+    this.scene.add(this.features.mesh);
     this.scene.add(this.tracks.mesh);
     this.scene.add(this.npcs.mesh);
     this.crashTrailMesh = new Mesh(new PlaneGeometry(1, 1), this.crashTrail.material);
@@ -105,11 +113,26 @@ export class GameRenderer {
     this.collisionDebugMesh.position.z = 0.8;
     this.collisionDebugMesh.visible = false;
     this.scene.add(this.collisionDebugMesh);
+    const disabled = performanceConfig.disabled;
+    this.snowMesh.visible = !disabled.has('snow');
+    this.features.mesh.visible = !disabled.has('obstacles');
+    this.tracks.mesh.visible = !disabled.has('trails');
+    this.npcs.mesh.visible = !disabled.has('npcRender');
+    this.skierMesh.visible = !disabled.has('player');
   }
 
   async initialize(): Promise<void> {
     await this.renderer.init();
     this.resize();
+    // Compile optional crash pipelines during startup instead of hitching on
+    // the first collision/tree slam in the middle of a run.
+    const crashTrailVisible = this.crashTrailMesh.visible;
+    const treeForegroundVisible = this.treeForegroundMesh.visible;
+    this.crashTrailMesh.visible = true;
+    this.treeForegroundMesh.visible = true;
+    await this.renderer.compileAsync(this.scene, this.camera);
+    this.crashTrailMesh.visible = crashTrailVisible;
+    this.treeForegroundMesh.visible = treeForegroundVisible;
     addEventListener('resize', this.resize);
   }
 
@@ -130,16 +153,29 @@ export class GameRenderer {
     origin: Readonly<WorldPosition>,
     npcs: readonly Readonly<NpcState>[],
   ): void {
+    const preparationStarted = performance.now();
     resolveSkierPose(state, input, this.poseOverride, this.pose);
     const pose = this.pose;
     this.snow.worldX.value = this.cameraWorldX - origin.x;
     this.snow.worldY.value = this.cameraWorldY - origin.y;
     this.markers.worldX.value = this.cameraWorldX - origin.x;
     this.markers.worldY.value = this.cameraWorldY - origin.y;
-    this.features.worldX.value = this.cameraWorldX;
-    this.features.worldY.value = this.cameraWorldY;
+    if (this.features.mesh.visible) {
+      this.features.update(this.cameraWorldX, this.cameraWorldY, this.viewWidth, this.viewHeight);
+    }
     this.tracks.updateCamera(this.cameraWorldX, this.cameraWorldY);
-    this.npcs.update(npcs, this.cameraWorldX, this.cameraWorldY);
+    if (this.npcs.mesh.visible) {
+      const npcStarted = performance.now();
+      this.npcs.update(
+        npcs,
+        this.cameraWorldX,
+        this.cameraWorldY,
+        this.viewWidth,
+        this.viewHeight,
+        this.performanceConfig.disabled,
+      );
+      this.npcRenderTiming.push(performance.now() - npcStarted);
+    }
     this.treeForeground.worldX.value = this.cameraWorldX;
     this.treeForeground.worldY.value = this.cameraWorldY;
     this.skier.lean.value = pose.lean;
@@ -153,7 +189,7 @@ export class GameRenderer {
     this.skier.spray.value = pose.spray;
     this.skier.stopped.value = pose.stopped;
     const crash = state.crash;
-    this.treeForegroundMesh.visible =
+    this.treeForegroundMesh.visible = !this.performanceConfig.disabled.has('crashEffects') &&
       crash.active &&
       crash.family === 'obstacle-slam' &&
       crash.phase !== 'rest';
@@ -172,9 +208,8 @@ export class GameRenderer {
     this.skier.slideTrail.value = 0;
     this.skier.slideSpray.value = crash.slideTrail;
     this.skier.jumpLift.value = Math.min(0.19, state.airborneHeight * 0.052);
-    this.crashTrailMesh.visible = crash.active && crash.trailActive;
-    this.crashTrail.worldX.value = this.cameraWorldX;
-    this.crashTrail.worldY.value = this.cameraWorldY;
+    this.crashTrailMesh.visible =
+      !this.performanceConfig.disabled.has('crashEffects') && crash.active && crash.trailActive;
     this.crashTrail.startX.value = crash.trailStartX;
     this.crashTrail.startY.value = crash.trailStartY;
     this.crashTrail.endX.value = state.position.x;
@@ -183,7 +218,19 @@ export class GameRenderer {
       crash.active && crash.trailActive ? 0.45 + crash.severity * 0.55 : 0;
     this.crashTrail.family.value =
       crash.family === 'face-plant' ? 0 : crash.family === 'side-spin' ? 1 : crash.family === 'rolling-tumble' ? 2 : 3;
-    const shake =
+    const trailMargin = 2.4;
+    const trailWidth = Math.abs(state.position.x - crash.trailStartX) + trailMargin * 2;
+    const trailHeight = Math.abs(state.position.y - crash.trailStartY) + trailMargin * 2;
+    const trailCenterX = (state.position.x + crash.trailStartX) * 0.5;
+    const trailCenterY = (state.position.y + crash.trailStartY) * 0.5;
+    this.crashTrail.boundsCenterX.value = trailCenterX;
+    this.crashTrail.boundsCenterY.value = trailCenterY;
+    this.crashTrail.boundsWidth.value = trailWidth;
+    this.crashTrail.boundsHeight.value = trailHeight;
+    this.crashTrailMesh.scale.set(trailWidth, trailHeight, 1);
+    this.crashTrailMesh.position.x = trailCenterX - this.cameraWorldX;
+    this.crashTrailMesh.position.y = this.cameraWorldY - trailCenterY;
+    const shake = !this.performanceConfig.disabled.has('cameraEffects') &&
       this.shakeTime > 0
         ? Math.sin(this.shakeTime * 83) * this.shakeStrength * (this.shakeTime / 0.32)
         : 0;
@@ -210,7 +257,10 @@ export class GameRenderer {
       this.collisionDebug.contactY.value = this.debugContactWorldY - this.cameraWorldY;
       this.collisionDebugMesh.position.set(0, 0, 0.8);
     }
+    this.preparationTiming.push(performance.now() - preparationStarted);
+    const submissionStarted = performance.now();
     this.renderer.render(this.scene, this.camera);
+    this.submissionTiming.push(performance.now() - submissionStarted);
   }
 
   setPoseOverride(pose: SkierPoseName | null): void {
@@ -263,39 +313,54 @@ export class GameRenderer {
   }
 
   get drawCalls(): number {
-    return 5 + Number(this.treeForegroundMesh.visible) + Number(this.crashTrailMesh.visible) +
+    return Number(this.snowMesh.visible) + Number(this.features.mesh.visible) +
+      Number(this.tracks.mesh.visible) + Number(this.npcs.mesh.visible) +
+      Number(this.skierMesh.visible) + Number(this.treeForegroundMesh.visible) +
+      Number(this.crashTrailMesh.visible) +
       Number(this.markersVisible) +
       Number(this.collisionDebugMesh.visible);
   }
 
   get visibleFeatureEstimate(): number {
-    return Math.round((this.viewWidth / 12) * (this.viewHeight / 12) * 0.38);
+    return this.features.count;
   }
 
   get trackSampleCount(): number {
     return this.tracks.sampleCount;
   }
 
+  get canvasPixelWidth(): number {
+    return this.renderer.domElement.width;
+  }
+
+  get canvasPixelHeight(): number {
+    return this.renderer.domElement.height;
+  }
+
+  get pixelRatio(): number {
+    return this.appliedPixelRatio;
+  }
+
   private readonly resize = (): void => {
     const size = new Vector2(innerWidth, innerHeight);
+    const requestedRatio = this.performanceConfig.renderScale ?? Math.min(devicePixelRatio, 1.5);
+    const budgetRatio = Math.sqrt(
+      this.performanceConfig.maxCanvasPixels / Math.max(1, size.x * size.y),
+    );
+    this.appliedPixelRatio = Math.max(0.5, Math.min(requestedRatio, budgetRatio));
+    this.renderer.setPixelRatio(this.appliedPixelRatio);
     this.renderer.setSize(size.x, size.y, false);
     const aspect = size.x / size.y;
     this.viewHeight = aspect < 0.72 ? 94 : aspect < 1.15 ? 86 : BASE_VIEW_HEIGHT;
     this.viewWidth = this.viewHeight * aspect;
     this.snowMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.markerMesh.scale.set(this.viewWidth, this.viewHeight, 1);
-    this.featureMesh.scale.set(this.viewWidth, this.viewHeight, 1);
-    this.crashTrailMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.treeForegroundMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.collisionDebugMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.snow.viewWidth.value = this.viewWidth;
     this.snow.viewHeight.value = this.viewHeight;
     this.markers.viewWidth.value = this.viewWidth;
     this.markers.viewHeight.value = this.viewHeight;
-    this.features.viewWidth.value = this.viewWidth;
-    this.features.viewHeight.value = this.viewHeight;
-    this.crashTrail.viewWidth.value = this.viewWidth;
-    this.crashTrail.viewHeight.value = this.viewHeight;
     this.treeForeground.viewWidth.value = this.viewWidth;
     this.treeForeground.viewHeight.value = this.viewHeight;
     this.collisionDebug.viewWidth.value = this.viewWidth;

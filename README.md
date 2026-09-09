@@ -1,12 +1,29 @@
 # Powderline
 
-Powderline is an original, shader-drawn downhill skiing game and the first slice
-of a reusable GPU procedural-world engine. The current prototype includes an
-endless deterministic mountain, responsive skiing, obstacles and collisions,
-procedural crashes, ramps and jumping, persistent-looking lightweight ski tracks,
-replay links, and development/measurement tooling.
+Powderline is an original browser skiing game: a deterministic downhill run
+through a procedurally generated mountain, rendered with WebGPU and Three.js
+TSL. It is moving from prototype toward a feature-complete web game, a polished
+release candidate, physical-device testing, and eventual mobile/native packaging
+investigation. This repository is the technical source of truth for the game.
 
-No image, texture, model, font, or audio assets are used by the game.
+Powderline's visible game art is procedural shader code and generated geometry.
+It does not use downloaded sprites, texture atlases, imported character models,
+or external game-art assets. Audio, analytics, native packaging, and final store
+assets are intentionally not implemented yet.
+
+## Project locations and source of truth
+
+- Local development: `C:\Users\tyler\Powderline`
+- GitHub code and history: [Tyguy101/powderline](https://github.com/Tyguy101/powderline)
+- Stable web build: [powderline-lake.vercel.app](https://powderline-lake.vercel.app/)
+- Work/backlog: Linear project **Powderline**
+- Runtime health: Sentry project, when `VITE_SENTRY_DSN` is configured
+- Human product and release material: the [Powderline Google Drive repository](https://drive.google.com/drive/u/0/folders/13jRVVL1X3gYCPVVRrFofXsREiYYPKW5T)
+
+Local is the working copy, GitHub is canonical code/history, Vercel is the
+current deployed web build, Linear is actionable work, Sentry is runtime
+evidence, and Drive is the human-facing product/release repository. See
+[docs/DEVELOPMENT_WORKFLOW.md](./docs/DEVELOPMENT_WORKFLOW.md).
 
 ## Run
 
@@ -15,7 +32,7 @@ Requires a current browser with WebGPU enabled and Node.js 22 or newer.
 The active local checkout is:
 
 ```text
-C:\Users\tyler\Procedural Games
+C:\Users\tyler\Powderline
 ```
 
 ```bash
@@ -55,6 +72,10 @@ project named `powderline`.
 See [DEPLOYMENT.md](./DEPLOYMENT.md) for the GitHub/Vercel workflow. Temporary
 Cloudflare Workers are no longer part of development or deployment.
 
+Production deploys from GitHub `main` through the persistent Vercel project
+`powderline`. Preview deployments are for review only; the stable URL above is
+the address to share.
+
 ## Controls
 
 - `A` / Left Arrow: carve left
@@ -89,12 +110,18 @@ npm run build
 npm run benchmark
 npm run benchmark:potato
 npm run benchmark:mobile
+npm run benchmark:matrix
 npm run report
 ```
 
 Benchmark output is written to `tools/reports/` and intentionally ignored by Git.
 
 The bottom-left status chip includes the eight-character Git build identifier.
+The benchmark matrix records CSS size, backing-canvas pixels, DPR, frame
+percentiles, long frames, browser errors, and in-game subsystem timings. Current
+policy and historical regression evidence are summarized in
+[OPTIMIZATION_REPORT.md](./OPTIMIZATION_REPORT.md); commands and thresholds are
+in [BENCHMARKING.md](./BENCHMARKING.md).
 
 ## Status
 
@@ -137,11 +164,28 @@ That work remains preserved on the
 `codex/experimental-toroidal-snow-mask` Git branch. The normal game does not
 allocate, update, relax, or sample that persistent texture.
 
-The current restored benchmark baseline is approximately 60 FPS on both the
-desktop and mobile automated profiles. The NPC population adds one shared
-instanced draw call, bringing normal gameplay to five draw calls.
+The renderer now uses an evidence-based one-million-pixel canvas budget, tight
+instanced obstacle/NPC regions, partial trail uploads, allocation-free rolling
+metrics, and startup pipeline prewarming. This prevents high-DPI laptop displays
+from silently multiplying fullscreen shader work while keeping the HUD at native
+CSS resolution. See [OPTIMIZATION_REPORT.md](./OPTIMIZATION_REPORT.md) for
+before/after measurements, subsystem costs, limitations, and future headroom.
 
-Planned later milestones include expanded obstacle variety, tricks and
-distance/trick scoring, additional ramp and landing behavior, dynamic quality
-selection, GPU compute feature generation, clipmaps, and a
-future arcade portal. Fully persistent terrain deformation remains experimental.
+The release path is intentionally staged:
+
+1. feature-complete browser game;
+2. polished release candidate;
+3. mobile/native packaging feasibility investigation;
+4. physical-device testing;
+5. beta/TestFlight preparation;
+6. App Store submission.
+
+The next product work is tracked in Linear rather than duplicated here. Known
+future areas include progressive mountain difficulty, additional hazards,
+scoring/run structure, audio, onboarding, mobile UX, accessibility, and release
+QA. The Web → iOS packaging investigation must test WebGPU/WebKit behavior,
+controllers, touch, lifecycle, orientation, audio, safe areas, storage,
+performance, and App Store rules before a wrapper technology is chosen.
+
+The persistent toroidal snow-mask experiment remains available on the
+`codex/experimental-toroidal-snow-mask` branch, but is not part of production.

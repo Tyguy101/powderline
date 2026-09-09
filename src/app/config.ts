@@ -12,12 +12,20 @@ export interface GameConfig {
   readonly crashLabMode: boolean;
   readonly npcLabMode: boolean;
   readonly replay: string | null;
+  readonly performance: PerformanceConfig;
+}
+
+export interface PerformanceConfig {
+  readonly disabled: ReadonlySet<string>;
+  readonly renderScale: number | null;
+  readonly maxCanvasPixels: number;
 }
 
 const query = new URLSearchParams(location.search);
 const quality = query.get('quality');
 const replay = query.get('replay');
 const replayWorldSeed = replaySeed(replay);
+const disabled = new Set((query.get('disable') ?? '').split(',').filter(Boolean));
 
 export const GAME_CONFIG: GameConfig = {
   seed: replayWorldSeed ?? Number(query.get('seed') ?? 0x51f15e),
@@ -30,6 +38,16 @@ export const GAME_CONFIG: GameConfig = {
   crashLabMode: query.has('crashLab'),
   npcLabMode: query.has('npcLab'),
   replay: replayWorldSeed === null ? null : replay,
+  performance: {
+    disabled,
+    renderScale: query.has('renderScale')
+      ? Math.max(0.5, Math.min(2, Number(query.get('renderScale')) || 1))
+      : null,
+    maxCanvasPixels: Math.max(
+      1_000_000,
+      Number(query.get('maxCanvasPixels')) || 1_000_000,
+    ),
+  },
   quality:
     quality === 'potato' || quality === 'low' || quality === 'high'
       ? quality

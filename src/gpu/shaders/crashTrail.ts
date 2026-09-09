@@ -37,10 +37,10 @@ function disc(
 }
 
 export function createCrashTrailShader() {
-  const worldX = uniform(0);
-  const worldY = uniform(0);
-  const viewWidth = uniform(80);
-  const viewHeight = uniform(80);
+  const boundsCenterX = uniform(0);
+  const boundsCenterY = uniform(0);
+  const boundsWidth = uniform(1);
+  const boundsHeight = uniform(1);
   const startX = uniform(0);
   const startY = uniform(0);
   const endX = uniform(0);
@@ -49,8 +49,8 @@ export function createCrashTrailShader() {
   const family = uniform(0);
   const p = uv();
   const point = vec2(
-    p.x.sub(0.5).mul(viewWidth).add(worldX),
-    float(0.5).sub(p.y).mul(viewHeight).add(worldY),
+    p.x.sub(0.5).mul(boundsWidth).add(boundsCenterX),
+    float(0.5).sub(p.y).mul(boundsHeight).add(boundsCenterY),
   );
   const start = vec2(startX, startY);
   const end = vec2(endX, endY);
@@ -90,10 +90,10 @@ export function createCrashTrailShader() {
   material.depthWrite = false;
   return {
     material,
-    worldX,
-    worldY,
-    viewWidth,
-    viewHeight,
+    boundsCenterX,
+    boundsCenterY,
+    boundsWidth,
+    boundsHeight,
     startX,
     startY,
     endX,

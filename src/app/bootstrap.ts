@@ -1,5 +1,6 @@
 import { Game } from './Game';
 import { GAME_CONFIG } from './config';
+import { initializeSentry, reportStartupFailure } from '../monitoring/Sentry';
 
 function showCompatibility(root: HTMLElement, error?: unknown): void {
   const message = error instanceof Error ? error.message : 'WebGPU is not available in this browser.';
@@ -16,7 +17,9 @@ function showCompatibility(root: HTMLElement, error?: unknown): void {
 export async function bootstrap(): Promise<void> {
   const root = document.querySelector<HTMLElement>('#app');
   if (!root) throw new Error('Application root is missing.');
+  await initializeSentry();
   if (!('gpu' in navigator)) {
+    reportStartupFailure(new Error('WebGPU is unavailable.'), 'webgpu-availability');
     showCompatibility(root);
     return;
   }
@@ -25,6 +28,7 @@ export async function bootstrap(): Promise<void> {
     await game.start();
   } catch (error) {
     console.error('WebGPU initialization failed', error);
+    reportStartupFailure(error, 'webgpu-initialization');
     showCompatibility(root, error);
   }
 }

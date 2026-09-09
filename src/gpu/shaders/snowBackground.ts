@@ -1,5 +1,11 @@
 import { MeshBasicNodeMaterial } from 'three/webgpu';
-import { cos, float, mix, sin, uniform, uv, vec3 } from 'three/tsl';
+import type { Node } from 'three/webgpu';
+import { abs, float, fract, mix, smoothstep, uniform, uv, vec3 } from 'three/tsl';
+
+function softWave(value: Node<'float'>): Node<'float'> {
+  const triangle = float(1).sub(abs(fract(value).mul(2).sub(1)));
+  return smoothstep(0.08, 0.92, triangle);
+}
 
 export interface SnowShader {
   readonly material: MeshBasicNodeMaterial;
@@ -17,9 +23,11 @@ export function createSnowShader(seed: number): SnowShader {
   const p = uv();
   const wx = p.x.sub(0.5).mul(viewWidth).add(worldX);
   const wy = float(0.5).sub(p.y).mul(viewHeight).add(worldY);
-  const broad = sin(wx.mul(0.055).add(wy.mul(0.018))).mul(0.5).add(0.5);
-  const grain = sin(wx.mul(0.31).add(float(seed % 997))).mul(cos(wy.mul(0.22))).mul(0.5).add(0.5);
-  const streak = sin(wx.mul(0.04).sub(wy.mul(0.17))).mul(0.5).add(0.5);
+  // Smooth triangle waves preserve the subtle moving snow bands without four
+  // transcendental operations per pixel across the fullscreen background.
+  const broad = softWave(wx.mul(0.0088).add(wy.mul(0.0029)));
+  const grain = softWave(wx.mul(0.049).add(wy.mul(0.035)).add(float((seed % 997) * 0.01)));
+  const streak = softWave(wx.mul(0.0064).sub(wy.mul(0.027)));
   const base = mix(vec3(0.72, 0.9, 0.94), vec3(0.95, 0.985, 0.985), p.y);
   const shade = broad.mul(0.045).add(grain.mul(0.018)).add(streak.mul(0.012));
   const material = new MeshBasicNodeMaterial();

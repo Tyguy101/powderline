@@ -85,6 +85,17 @@ Vercel supplies `VERCEL_GIT_COMMIT_SHA`. Vite embeds its first eight characters
 in the game. Local builds use `git rev-parse --short=8 HEAD`. The identifier is
 visible in the bottom-left status chip and exposed in the runtime metrics.
 
+## Runtime diagnostics
+
+Sentry is optional and disabled unless `VITE_SENTRY_DSN` is configured in the
+Vercel project or local `.env.local`. When enabled, the browser SDK reports
+unhandled JavaScript errors, failed WebGPU startup, and uncaught promise/runtime
+failures with the build ID, release, environment, browser, viewport, DPR, and
+WebGPU availability. It does not send replay histories, arbitrary input, or
+personal identifiers. Keep the DSN in Vercel environment settings; never commit
+it. The repository contains the integration and `.env.example`, but a Sentry
+organization/project must be connected before production events can be verified.
+
 ## Future arcade hosting
 
 The current build assumes `/` by default, which works for a dedicated domain

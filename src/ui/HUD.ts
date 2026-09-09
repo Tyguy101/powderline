@@ -13,6 +13,9 @@ export class HUD {
   private readonly controllerToast: HTMLElement;
   private readonly pauseOverlay: HTMLElement;
   private toastTimer = 0;
+  private lastDistance = -1;
+  private lastSpeed = -1;
+  private debugCountdown = 0;
   private debugVisible = new URLSearchParams(location.search).has('debug');
 
   constructor(root: HTMLElement, config: GameConfig) {
@@ -77,21 +80,42 @@ export class HUD {
     drawCalls: number,
     visibleFeatures: number,
     npcMetrics: Readonly<NpcMetrics>,
+    diagnostics: Readonly<Record<string, number | string>>,
   ): void {
-    this.distance.textContent = `${Math.floor(state.position.y)} m`;
-    this.speed.textContent = `${Math.round(Math.hypot(state.velocityX, state.velocityY) * 3.6)} km/h`;
+    const distance = Math.floor(state.position.y);
+    const speed = Math.round(Math.hypot(state.velocityX, state.velocityY) * 3.6);
+    if (distance !== this.lastDistance) {
+      this.distance.textContent = `${distance} m`;
+      this.lastDistance = distance;
+    }
+    if (speed !== this.lastSpeed) {
+      this.speed.textContent = `${speed} km/h`;
+      this.lastSpeed = speed;
+    }
     this.debug.classList.toggle('visible', this.debugVisible);
     if (!this.debugVisible) return;
+    this.debugCountdown -= 1;
+    if (this.debugCountdown > 0) return;
+    this.debugCountdown = 12;
     this.debug.innerHTML = `<b>FRAME METRICS</b>
 FPS <em>${metrics.fps.toFixed(1)}</em>
 AVG <em>${metrics.averageMs.toFixed(2)} ms</em>
+P95 / P99 <em>${metrics.p95Ms.toFixed(1)} / ${metrics.p99Ms.toFixed(1)} ms</em>
 1% LOW <em>${metrics.onePercentLowFps.toFixed(1)} fps</em>
-SIM <em>60 Hz fixed</em>
-SUBMIT <em>browser timed</em>
+LONG &gt;25 / &gt;50 <em>${metrics.longFrames25ms} / ${metrics.longFrames50ms}</em>
+SIM <em>${Number(diagnostics.simulationAverageMs ?? 0).toFixed(3)} ms</em>
+COLLISION <em>${Number(diagnostics.collisionAverageMs ?? 0).toFixed(3)} ms</em>
+TRAIL CPU <em>${Number(diagnostics.trailAverageMs ?? 0).toFixed(3)} ms</em>
+RENDER PREP <em>${Number(diagnostics.renderPreparationAverageMs ?? 0).toFixed(3)} ms</em>
+NPC PREP <em>${Number(diagnostics.npcRenderPreparationAverageMs ?? 0).toFixed(3)} ms</em>
+SUBMIT CPU <em>${Number(diagnostics.submissionCpuAverageMs ?? 0).toFixed(3)} ms</em>
 DRAWS <em>${drawCalls}</em>
 FEATURES <em>~${visibleFeatures} visible</em>
 NPCS <em>${npcMetrics.active} / 5 active</em>
 NPC SIM <em>${npcMetrics.simulationMs.toFixed(3)} ms</em>
+CANVAS <em>${diagnostics.canvasPixelWidth ?? 0} × ${diagnostics.canvasPixelHeight ?? 0}</em>
+PIXELS <em>${(Number(diagnostics.canvasPixels ?? 0) / 1_000_000).toFixed(2)} MP</em>
+DPR <em>${Number(diagnostics.devicePixelRatio ?? devicePixelRatio).toFixed(2)} → ${Number(diagnostics.renderPixelRatio ?? 1).toFixed(2)}</em>
 CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>
