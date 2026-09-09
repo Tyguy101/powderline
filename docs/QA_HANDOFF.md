@@ -2,10 +2,10 @@
 
 ## Current milestone
 
-Repository consolidation and performance-foundation synchronization. The active
-checkout is now `C:\Users\tyler\Powderline`; the prior OneDrive/Procedural Games
-checkout is archived separately. This handoff is updated in place for the latest
-meaningful milestone.
+Repository consolidation, performance-foundation synchronization, and account
+setup. The active checkout is now `C:\Users\tyler\Powderline`; the prior
+OneDrive/Procedural Games checkout is archived separately. This handoff is
+updated in place for the latest meaningful milestone.
 
 ## Code and deployment identity
 
@@ -16,6 +16,11 @@ meaningful milestone.
 - Production: https://powderline-lake.vercel.app/
 - Vercel build ID/commit: verified over HTTPS with Playwright during this handoff;
   the page exposed the current branch's eight-character build identifier.
+- Linear project: [Powderline](https://linear.app/tyler-harris/project/powderline-b7e53d2ce4a1)
+- Linear backlog: 10 initial issues covering gameplay, polish, UI/UX, mobile,
+  App Store, QA, and release blocking.
+- Sentry: `TyGames/powderline` JavaScript project; Production `VITE_SENTRY_DSN`
+  configured in Vercel. No replay/input/PII collection is enabled.
 - Deterministic seed: `424242` for benchmark smoke/replay checks
 
 ## Material changes
@@ -24,6 +29,8 @@ meaningful milestone.
 - Preserved the performance hardening, benchmark matrix, world-feature renderer,
   allocation-free metrics, tight crash-trail bounds, and optional Sentry hook.
 - Added the durable development workflow and migration inventory.
+- Connected the canonical Linear project/backlog and created the TyGames Sentry
+  project with production DSN configuration.
 
 ## Validation completed
 
@@ -35,11 +42,10 @@ meaningful milestone.
 
 ## Review focus and limitations
 
-- Independently verify GitHub `main` matches the local migration SHA.
+- Independently verify GitHub `main` matches the local final SHA.
 - Re-check the eight-character build identifier after subsequent pushes and
   confirm that the canvas initializes over HTTPS.
 - Physical-device FPS and WebGPU adapter behavior still need a real desktop and
   phone/tablet pass; headless browser measurements are not a substitute.
-- Sentry project/organization linkage is not verifiable in this session because
-  no Sentry connector is available. The integration is inert until a DSN is set.
-- Linear project and issue IDs must be confirmed in the connected Linear account.
+- The Sentry project is new and has no production event baseline yet; verify the
+  first intentional startup/error event after the next release build.

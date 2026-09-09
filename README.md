@@ -16,8 +16,8 @@ assets are intentionally not implemented yet.
 - Local development: `C:\Users\tyler\Powderline`
 - GitHub code and history: [Tyguy101/powderline](https://github.com/Tyguy101/powderline)
 - Stable web build: [powderline-lake.vercel.app](https://powderline-lake.vercel.app/)
-- Work/backlog: Linear project **Powderline**
-- Runtime health: Sentry project, when `VITE_SENTRY_DSN` is configured
+- Work/backlog: [Linear project — Powderline](https://linear.app/tyler-harris/project/powderline-b7e53d2ce4a1)
+- Runtime health: [TyGames Sentry organization](https://tygames.sentry.io), project slug `powderline`; production DSN is configured in Vercel
 - Human product and release material: the [Powderline Google Drive repository](https://drive.google.com/drive/u/0/folders/13jRVVL1X3gYCPVVRrFofXsREiYYPKW5T)
 
 Local is the working copy, GitHub is canonical code/history, Vercel is the

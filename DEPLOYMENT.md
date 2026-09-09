@@ -87,14 +87,18 @@ visible in the bottom-left status chip and exposed in the runtime metrics.
 
 ## Runtime diagnostics
 
-Sentry is optional and disabled unless `VITE_SENTRY_DSN` is configured in the
-Vercel project or local `.env.local`. When enabled, the browser SDK reports
-unhandled JavaScript errors, failed WebGPU startup, and uncaught promise/runtime
-failures with the build ID, release, environment, browser, viewport, DPR, and
-WebGPU availability. It does not send replay histories, arbitrary input, or
-personal identifiers. Keep the DSN in Vercel environment settings; never commit
-it. The repository contains the integration and `.env.example`, but a Sentry
-organization/project must be connected before production events can be verified.
+Sentry is configured for the `TyGames` organization and the `powderline`
+JavaScript project. The public client DSN is stored in the persistent Vercel
+project's Production environment as `VITE_SENTRY_DSN`; it is intentionally not
+committed. For local diagnostics, place the same public DSN in ignored
+`.env.local` or copy the shape from `.env.example`.
+
+When enabled, the browser SDK reports unhandled JavaScript errors, failed
+WebGPU startup, and uncaught promise/runtime failures with the build ID, release,
+environment, browser, viewport, DPR, and WebGPU availability. It does not send
+replay histories, arbitrary input, or personal identifiers. Releases use the
+`powderline@<version>+<build>` format. Default Sentry alert rules were left
+disabled until a real release-traffic baseline exists.
 
 ## Future arcade hosting
 
