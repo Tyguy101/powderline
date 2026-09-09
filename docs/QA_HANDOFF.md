@@ -11,11 +11,11 @@ meaningful milestone.
 
 - Git branch: `main`
 - Git SHA (migration implementation): `8b5bc8a` (full SHA: `8b5bc8af594b04087fe989984862778d136648a0`)
-- Current branch tip: `faa2fc1c0c113cbab8ab5186e0f4339dc669bdd7` (documentation and deployment follow-ups)
+- Current branch tip: verify with `git rev-parse HEAD` and the GitHub `main` ref
 - GitHub: https://github.com/Tyguy101/powderline
 - Production: https://powderline-lake.vercel.app/
 - Vercel build ID/commit: verified over HTTPS with Playwright during this handoff;
-  the page exposed build `faa2fc1c`, matching the then-current branch tip.
+  the page exposed the current branch's eight-character build identifier.
 - Deterministic seed: `424242` for benchmark smoke/replay checks
 
 ## Material changes
