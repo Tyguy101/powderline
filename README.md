@@ -18,7 +18,7 @@ assets are intentionally not implemented yet.
 - Stable web build: [powderline-lake.vercel.app](https://powderline-lake.vercel.app/)
 - Work/backlog: [Linear project — Powderline](https://linear.app/tyler-harris/project/powderline-b7e53d2ce4a1)
 - Runtime health: [TyGames Sentry organization](https://tygames.sentry.io), project slug `powderline`; production DSN is configured in Vercel
-- Human product and release material: the [Powderline Google Drive repository](https://drive.google.com/drive/u/0/folders/13jRVVL1X3gYCPVVRrFofXsREiYYPKW5T)
+- Human product and release material: the [Powderline Google Drive repository](https://drive.google.com/drive/folders/1yrUGRQrhTOCgByO1lvuYKu6-WPuUwJzR)
 
 Local is the working copy, GitHub is canonical code/history, Vercel is the
 current deployed web build, Linear is actionable work, Sentry is runtime
@@ -111,6 +111,7 @@ npm run benchmark
 npm run benchmark:potato
 npm run benchmark:mobile
 npm run benchmark:matrix
+npm run qa:mobile
 npm run report
 ```
 
@@ -155,6 +156,9 @@ The default production build currently includes:
 - Pose, camera-scale, collision, crash-laboratory, and NPC-laboratory tools
 - F3 metrics, automated tests, screenshot/capture tools, and desktop/mobile
   Playwright benchmarks
+- Safe-area-aware phone/tablet HUD, touch pause/resume, single-pointer gesture
+  ownership, and predictable background/orientation recovery without catch-up
+- Player-facing WebGPU startup diagnostics instead of a blank failure screen
 
 The lightweight trail buffer is the production track implementation. A toroidal
 persistent snow-mask experiment was tested and then removed from the default
@@ -171,7 +175,12 @@ from silently multiplying fullscreen shader work while keeping the HUD at native
 CSS resolution. See [OPTIMIZATION_REPORT.md](./OPTIMIZATION_REPORT.md) for
 before/after measurements, subsystem costs, limitations, and future headroom.
 
-The release path is intentionally staged:
+The release path is intentionally staged. The current evidence recommends a
+Safari/Home Screen web app first and an isolated Capacitor 8 physical-device
+spike later; see
+[docs/MOBILE_AND_IOS_FEASIBILITY.md](./docs/MOBILE_AND_IOS_FEASIBILITY.md).
+
+The sequence is:
 
 1. feature-complete browser game;
 2. polished release candidate;
@@ -180,7 +189,8 @@ The release path is intentionally staged:
 5. beta/TestFlight preparation;
 6. App Store submission.
 
-The next product work is tracked in Linear rather than duplicated here. Known
+The next product milestone is the menu/app shell. Other work remains tracked in
+Linear rather than duplicated here. Known
 future areas include progressive mountain difficulty, additional hazards,
 scoring/run structure, audio, onboarding, mobile UX, accessibility, and release
 QA. The Web → iOS packaging investigation must test WebGPU/WebKit behavior,

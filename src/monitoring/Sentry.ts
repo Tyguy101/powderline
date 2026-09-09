@@ -9,7 +9,14 @@ function runtimeContext(): Record<string, unknown> {
     build_id: BUILD_ID,
     viewport: `${window.innerWidth}x${window.innerHeight}`,
     device_pixel_ratio: window.devicePixelRatio,
-    webgpu_available: 'gpu' in navigator,
+    canvas_size: (() => {
+      const canvas = document.querySelector<HTMLCanvasElement>('#game-canvas');
+      return canvas ? `${canvas.width}x${canvas.height}` : 'not-created';
+    })(),
+    orientation: matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape',
+    visibility_state: document.visibilityState,
+    secure_context: isSecureContext,
+    webgpu_available: Boolean(navigator.gpu),
     user_agent: navigator.userAgent,
   };
 }

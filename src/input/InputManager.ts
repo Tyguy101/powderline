@@ -12,6 +12,8 @@ export interface PointerGesture {
   tuck: boolean;
 }
 
+export type InputMethod = 'keyboard' | 'pointer' | 'touch' | 'gamepad';
+
 export function resolvePointerGesture(
   deltaX: number,
   deltaY: number,
@@ -34,6 +36,7 @@ export class InputManager {
   private brakeKey = false;
   private tuckKey = false;
   private pointerActive = false;
+  private activePointerId: number | null = null;
   private pointerStartX = 0;
   private pointerStartY = 0;
   private pointerSteer = 0;
@@ -59,6 +62,7 @@ export class InputManager {
   constructor(
     private readonly surface: HTMLElement,
     private readonly onControllerChange: (connected: boolean) => void = () => undefined,
+    private readonly onInputMethodChange: (method: InputMethod) => void = () => undefined,
     private readonly gamepads: () => readonly (Gamepad | null)[] =
       () => navigator.getGamepads?.() ?? [],
   ) {
@@ -70,6 +74,7 @@ export class InputManager {
     surface.addEventListener('pointermove', this.onPointerMove);
     surface.addEventListener('pointerup', this.onPointerUp);
     surface.addEventListener('pointercancel', this.onPointerUp);
+    surface.addEventListener('lostpointercapture', this.onPointerUp);
   }
 
   dispose(): void {
@@ -81,6 +86,7 @@ export class InputManager {
     this.surface.removeEventListener('pointermove', this.onPointerMove);
     this.surface.removeEventListener('pointerup', this.onPointerUp);
     this.surface.removeEventListener('pointercancel', this.onPointerUp);
+    this.surface.removeEventListener('lostpointercapture', this.onPointerUp);
   }
 
   consumeRestart(): boolean {
@@ -136,6 +142,30 @@ export class InputManager {
     return this.gamepadConnected;
   }
 
+  resetTransientState(): void {
+    this.left = false;
+    this.right = false;
+    this.brakeKey = false;
+    this.tuckKey = false;
+    this.pointerActive = false;
+    this.activePointerId = null;
+    this.pointerSteer = 0;
+    this.pointerBrake = false;
+    this.pointerTuck = false;
+    this.gamepadSteer = 0;
+    this.gamepadBrake = false;
+    this.gamepadTuck = false;
+    this.previousGamepad = {
+      steer: 0,
+      brake: false,
+      tuck: false,
+      confirm: false,
+      pause: false,
+      restart: false,
+    };
+    this.updateState();
+  }
+
   private updateState(): void {
     const keyboardSteer = Number(this.right) - Number(this.left);
     this.state.steer = this.pointerActive
@@ -149,6 +179,7 @@ export class InputManager {
   }
 
   private readonly onKeyDown = (event: KeyboardEvent): void => {
+    this.onInputMethodChange('keyboard');
     if (event.code === 'ArrowLeft' || event.code === 'KeyA') this.left = true;
     if (event.code === 'ArrowRight' || event.code === 'KeyD') this.right = true;
     if (event.code === 'ArrowUp' || event.code === 'KeyW') this.brakeKey = true;
@@ -172,6 +203,8 @@ export class InputManager {
   };
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    if (this.activePointerId !== null) return;
+    this.activePointerId = event.pointerId;
     this.pointerActive = true;
     this.pointerStartX = event.clientX;
     this.pointerStartY = event.clientY;
@@ -179,24 +212,30 @@ export class InputManager {
     this.pointerBrake = false;
     this.pointerTuck = false;
     this.updateState();
+    this.onInputMethodChange(event.pointerType === 'touch' ? 'touch' : 'pointer');
+    if (event.cancelable) event.preventDefault();
     this.surface.setPointerCapture(event.pointerId);
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    if (!this.pointerActive) return;
+    if (!this.pointerActive || event.pointerId !== this.activePointerId) return;
+    const bounds = this.surface.getBoundingClientRect();
     const gesture = resolvePointerGesture(
       event.clientX - this.pointerStartX,
       event.clientY - this.pointerStartY,
-      innerWidth,
-      innerHeight,
+      bounds.width,
+      bounds.height,
     );
     this.pointerSteer = gesture.steer;
     this.pointerBrake = gesture.brake;
     this.pointerTuck = gesture.tuck;
     this.updateState();
+    if (event.cancelable) event.preventDefault();
   };
 
-  private readonly onPointerUp = (): void => {
+  private readonly onPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== this.activePointerId) return;
+    this.activePointerId = null;
     this.pointerActive = false;
     this.pointerSteer = 0;
     this.pointerBrake = false;
@@ -207,6 +246,7 @@ export class InputManager {
   private readonly onGamepadConnected = (event: GamepadEvent): void => {
     if (this.gamepadIndex === null) this.gamepadIndex = event.gamepad.index;
     this.setControllerConnected(true);
+    this.onInputMethodChange('gamepad');
   };
 
   private readonly onGamepadDisconnected = (event: GamepadEvent): void => {

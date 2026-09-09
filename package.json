@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:https": "vite --mode https",
+    "setup:https": "powershell -ExecutionPolicy Bypass -File tools/dev/setup-local-https.ps1",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
@@ -16,6 +17,7 @@
     "benchmark:mobile": "tsx tools/benchmark/run-benchmark.ts --quality=low --viewport=390x844",
     "benchmark:matrix": "tsx tools/benchmark/run-matrix.ts",
     "benchmark:matrix:full": "tsx tools/benchmark/run-matrix.ts --full",
+    "qa:mobile": "tsx tools/qa/run-mobile-lifecycle.ts",
     "capture": "tsx tools/capture/capture.ts",
     "capture:crashes": "tsx tools/capture/crash-sequence.ts",
     "report": "tsx tools/benchmark/create-report.ts"

@@ -3,6 +3,7 @@ import type { SkiState } from '../simulation/SkiPhysics';
 import type { GameConfig } from '../app/config';
 import { BUILD_ID } from '../app/build';
 import type { NpcMetrics } from '../simulation/NpcSystem';
+import type { InputMethod } from '../input/InputManager';
 
 export class HUD {
   private readonly distance: HTMLElement;
@@ -10,15 +11,19 @@ export class HUD {
   private readonly debug: HTMLElement;
   private readonly keyboardHint: HTMLElement;
   private readonly controllerHint: HTMLElement;
+  private readonly touchHint: HTMLElement;
   private readonly controllerToast: HTMLElement;
   private readonly pauseOverlay: HTMLElement;
+  private readonly pauseButton: HTMLButtonElement;
+  private controllerConnected = false;
+  private inputMethod: InputMethod = navigator.maxTouchPoints > 0 ? 'touch' : 'keyboard';
   private toastTimer = 0;
   private lastDistance = -1;
   private lastSpeed = -1;
   private debugCountdown = 0;
   private debugVisible = new URLSearchParams(location.search).has('debug');
 
-  constructor(root: HTMLElement, config: GameConfig) {
+  constructor(root: HTMLElement, config: GameConfig, onPauseToggle: () => void) {
     root.insertAdjacentHTML(
       'beforeend',
       `<header class="hud" aria-label="Run information">
@@ -30,12 +35,15 @@ export class HUD {
       </header>
       <div class="hint">
         <span data-keyboard-help><kbd>A</kbd><kbd>D</kbd> carve <i>•</i> <kbd>W</kbd> brake <i>•</i> <kbd>S</kbd> tuck <i>•</i> drag in 8 directions${config.developmentMode ? ' <i>•</i> <kbd>G</kbd> poses' : ''}</span>
+        <span data-touch-help hidden>Drag sideways to carve <i>•</i> up to brake <i>•</i> down to tuck</span>
         <span data-controller-help hidden>Left stick steer/up brake/down tuck <i>•</i> triggers brake/tuck <i>•</i> Menu pause <i>•</i> primary confirm <i>•</i> top face restart</span>
       </div>
+      <button class="mobile-pause" type="button" aria-label="Pause game">Pause</button>
       <div class="controller-toast" role="status" aria-live="polite"></div>
       <section class="pause-overlay" aria-label="Game paused">
         <div><span>PAUSED</span><strong>Fresh tracks, whenever you are.</strong>
-        <p>Press the Menu button, primary button, <kbd>P</kbd>, or <kbd>Esc</kbd> to continue.</p></div>
+        <p>Use the button below, a controller confirm, <kbd>P</kbd>, or <kbd>Esc</kbd> to continue.</p>
+        <button data-resume type="button">Continue run</button></div>
       </section>
       <aside id="debug" class="debug" aria-live="polite"></aside>
       <div class="status-chip"><i></i> WEBGPU PROCEDURAL <span>BUILD ${BUILD_ID}</span></div>`,
@@ -44,9 +52,13 @@ export class HUD {
     this.speed = root.querySelector('#speed')!;
     this.debug = root.querySelector('#debug')!;
     this.keyboardHint = root.querySelector('[data-keyboard-help]')!;
+    this.touchHint = root.querySelector('[data-touch-help]')!;
     this.controllerHint = root.querySelector('[data-controller-help]')!;
     this.controllerToast = root.querySelector('.controller-toast')!;
     this.pauseOverlay = root.querySelector('.pause-overlay')!;
+    this.pauseButton = root.querySelector('.mobile-pause')!;
+    this.pauseButton.addEventListener('click', onPauseToggle);
+    root.querySelector('[data-resume]')!.addEventListener('click', onPauseToggle);
     addEventListener('keydown', (event) => {
       if (event.code === 'F3') {
         event.preventDefault();
@@ -54,11 +66,12 @@ export class HUD {
       }
     });
     this.debug.dataset.seed = String(config.seed);
+    this.updateHelp();
   }
 
   setControllerConnected(connected: boolean): void {
-    this.keyboardHint.hidden = connected;
-    this.controllerHint.hidden = !connected;
+    this.controllerConnected = connected;
+    this.updateHelp();
     this.controllerToast.textContent = connected
       ? 'Controller connected'
       : 'Controller disconnected';
@@ -69,8 +82,21 @@ export class HUD {
     }, 2200);
   }
 
+  setInputMethod(method: InputMethod): void {
+    this.inputMethod = method;
+    this.updateHelp();
+  }
+
   setPaused(paused: boolean): void {
     this.pauseOverlay.classList.toggle('visible', paused);
+    this.pauseButton.textContent = paused ? 'Resume' : 'Pause';
+    this.pauseButton.setAttribute('aria-label', paused ? 'Resume game' : 'Pause game');
+  }
+
+  private updateHelp(): void {
+    this.controllerHint.hidden = !this.controllerConnected;
+    this.touchHint.hidden = this.controllerConnected || this.inputMethod !== 'touch';
+    this.keyboardHint.hidden = this.controllerConnected || this.inputMethod === 'touch';
   }
 
   update(
@@ -116,6 +142,7 @@ NPC SIM <em>${npcMetrics.simulationMs.toFixed(3)} ms</em>
 CANVAS <em>${diagnostics.canvasPixelWidth ?? 0} × ${diagnostics.canvasPixelHeight ?? 0}</em>
 PIXELS <em>${(Number(diagnostics.canvasPixels ?? 0) / 1_000_000).toFixed(2)} MP</em>
 DPR <em>${Number(diagnostics.devicePixelRatio ?? devicePixelRatio).toFixed(2)} → ${Number(diagnostics.renderPixelRatio ?? 1).toFixed(2)}</em>
+INPUT <em>${Number(diagnostics.inputSteer ?? 0).toFixed(2)} / ${diagnostics.inputBrake ?? 'false'} / ${diagnostics.inputTuck ?? 'false'}</em>
 CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>

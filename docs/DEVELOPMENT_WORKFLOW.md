@@ -46,6 +46,7 @@ npm test
 npm run build
 npm run benchmark -- --duration=5 --warmup=3 --scenario=smoke
 npm run benchmark:matrix
+npm run qa:mobile
 ```
 
 Also launch `npm run dev`, exercise the changed flow locally, inspect the
@@ -88,12 +89,13 @@ Markdown. Link to the authoritative system and keep summaries current.
 
 ## Mobile and App Store investigation
 
-Create a future Linear milestone named **Web → iOS packaging feasibility**.
-It must test WebGPU through the chosen iOS runtime, WKWebView/Safari behavior,
-controllers, touch, pause/background lifecycle, orientation, audio, safe areas,
-filesystem/storage, App Store rules, and physical iPhone/iPad performance.
-Capacitor or another wrapper is a hypothesis, not a decision. Do not convert
-Powderline during a normal web gameplay milestone.
+The first mobile foundation and iOS feasibility pass recommends Safari/Home
+Screen distribution first, followed by an isolated Capacitor 8 spike. Capacitor
+remains a hypothesis until physical WKWebView testing passes. Use
+[PHYSICAL_DEVICE_QA.md](./PHYSICAL_DEVICE_QA.md) for the device gate and
+[MOBILE_AND_IOS_FEASIBILITY.md](./MOBILE_AND_IOS_FEASIBILITY.md) for current
+platform/toolchain evidence. Do not convert Powderline during a normal gameplay
+milestone.
 
 ## Independent QA handoff
 

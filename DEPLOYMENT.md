@@ -32,11 +32,21 @@ computer's private-IP HTTP origin. Therefore:
   WebGPU is normally unavailable on a phone or tablet.
 - `npm run dev:https` serves the same HMR development build over HTTPS.
 
-The HTTPS command uses Vite's basic SSL plugin. Its certificate is self-signed.
-Each device must explicitly trust that certificate/issuer before the origin is
-a valid secure context; bypassing a certificate warning alone may not enable
-WebGPU. For routine phone testing, the trusted HTTPS Vercel deployment is often
-more practical.
+For repeatable phone/tablet testing on Windows:
+
+1. Install mkcert: `winget install FiloSottile.mkcert`.
+2. Run `npm run setup:https`. It installs a local development CA and creates
+   ignored `.cert/` files valid for localhost and the active LAN addresses.
+3. Install that mkcert root CA on the test device. On iOS/iPadOS, install its
+   profile and explicitly enable full trust under **Settings → General → About
+   → Certificate Trust Settings**.
+4. Run `npm run dev:https` and open its printed Network HTTPS URL.
+
+When the trusted `.cert/` pair is absent, Vite falls back to its basic self-
+signed certificate. That fallback is useful on desktop, but bypassing its
+warning on a phone may not create the fully trusted secure context WebGPU needs.
+For milestone sharing, the Vercel build remains the simplest trusted HTTPS path.
+See [docs/PHYSICAL_DEVICE_QA.md](./docs/PHYSICAL_DEVICE_QA.md) for the test form.
 
 Do not use browser flags that weaken secure-context checks as a project
 workaround.

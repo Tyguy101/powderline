@@ -11,6 +11,7 @@ tools/reports/*
 playwright-report/
 test-results/
 .wrangler/
+.cert/
 *.local
 *.tsbuildinfo
 .DS_Store

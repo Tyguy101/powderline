@@ -1,9 +1,15 @@
 # Mobile
 
-The game surface uses `touch-action: none` so browser gestures are suppressed only
-inside play. Horizontal drag controls steering; pressing the lower screen region
-engages braking. UI spacing and type adapt below 640 px.
+Powderline is landscape-first and portrait-supported. Drag horizontally to
+steer, upward to brake, and downward to tuck; diagonal drags combine actions.
+One primary pointer owns the gesture so a second finger cannot hijack steering.
 
-The current build limits pixel ratio to 1.5. Adaptive internal resolution, startup
-profiling, device orientation input, and the full Potato/Low/Medium/High tuning
-table remain future work.
+The game surface suppresses scrolling, selection, callouts, and touch gestures.
+HUD layout uses safe-area insets and dynamic viewport height, with 44 px pause,
+resume, crash, and restart targets. Backgrounding clears held input, stops the
+render loop, and returns to an explicit resume prompt without fixed-step catch-up.
+
+See [docs/PHYSICAL_DEVICE_QA.md](./docs/PHYSICAL_DEVICE_QA.md) for local HTTPS
+and real-device testing, and
+[docs/MOBILE_AND_IOS_FEASIBILITY.md](./docs/MOBILE_AND_IOS_FEASIBILITY.md) for
+the App Store packaging recommendation and unresolved iOS questions.

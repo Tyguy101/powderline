@@ -17,6 +17,7 @@ import { NpcSystem } from '../simulation/NpcSystem';
 import { BUILD_ID } from './build';
 import type { GameConfig } from './config';
 import { TimingCounter } from '../instrumentation/PerformanceCounters';
+import { LifecycleManager, type LifecyclePauseReason } from './LifecycleManager';
 
 export class Game {
   private readonly physics = new SkiPhysics();
@@ -34,6 +35,7 @@ export class Game {
   private npcInspectionActive = false;
   private crashPromptShown = false;
   private paused = false;
+  private renderWhilePaused = true;
   private readonly simulationTiming = new TimingCounter();
   private readonly collisionTiming = new TimingCounter();
   private readonly trailTiming = new TimingCounter();
@@ -66,10 +68,11 @@ export class Game {
       config.seed,
       config.quality === 'low' || config.quality === 'potato' ? 3 : 5,
     );
-    this.hud = new HUD(root, config);
+    this.hud = new HUD(root, config, () => this.setPaused(!this.paused));
     this.input = new InputManager(
       canvas,
       (connected) => this.hud.setControllerConnected(connected),
+      (method) => this.hud.setInputMethod(method),
     );
     this.crashOverlay = new CrashOverlay(root, () => this.restart());
     root.classList.toggle('performance-ui-disabled', config.performance.disabled.has('ui'));
@@ -242,7 +245,15 @@ export class Game {
 
   private setPaused(paused: boolean): void {
     this.paused = paused;
+    this.renderWhilePaused = true;
+    if (paused) this.input.resetTransientState();
+    else this.loop.resetClock();
     this.hud.setPaused(paused);
+  }
+
+  private pauseForLifecycle(reason: LifecyclePauseReason): void {
+    this.publicMetrics.pauseReason = reason;
+    this.setPaused(true);
   }
 
   private triggerLabCrash(settings: {
@@ -294,13 +305,29 @@ export class Game {
     this.npcs.reset(this.physics.state);
     document.body.classList.add('ready');
     this.loop.start();
+    new LifecycleManager({
+      pause: (reason) => this.pauseForLifecycle(reason),
+      suspend: () => this.loop.stop(),
+      resume: () => {
+        this.loop.resetClock();
+        this.loop.start();
+        this.renderWhilePaused = true;
+      },
+      viewportChanged: () => {
+        this.renderer.resizeToViewport();
+        this.renderWhilePaused = true;
+      },
+    });
   }
 
   private render(frameMs: number): void {
     const state = this.physics.state;
     this.origin.update(state.position);
     const snapshot = this.metrics.push(frameMs);
-    this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
+    if (!this.paused || this.renderWhilePaused) {
+      this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
+      this.renderWhilePaused = false;
+    }
     this.metricsPublishCountdown -= 1;
     if (this.metricsPublishCountdown <= 0) {
       this.metricsPublishCountdown = 10;
@@ -320,6 +347,11 @@ export class Game {
       trackSamples: this.renderer.trackSampleCount,
       paused: String(this.paused),
       gamepad: String(this.input.controllerConnected),
+      inputSteer: this.input.state.steer,
+      inputBrake: String(this.input.state.brake),
+      inputTuck: String(this.input.state.tuck),
+      visibility: document.visibilityState,
+      orientation: matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape',
       npcActive: this.npcs.metrics.active,
       npcRecycled: this.npcs.metrics.recycled,
       npcSimulationMs: this.npcs.metrics.simulationMs,

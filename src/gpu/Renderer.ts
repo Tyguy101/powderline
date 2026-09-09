@@ -341,8 +341,13 @@ export class GameRenderer {
     return this.appliedPixelRatio;
   }
 
+  resizeToViewport(): void {
+    this.resize();
+  }
+
   private readonly resize = (): void => {
-    const size = new Vector2(innerWidth, innerHeight);
+    const canvas = this.renderer.domElement;
+    const size = new Vector2(canvas.clientWidth || innerWidth, canvas.clientHeight || innerHeight);
     const requestedRatio = this.performanceConfig.renderScale ?? Math.min(devicePixelRatio, 1.5);
     const budgetRatio = Math.sqrt(
       this.performanceConfig.maxCanvasPixels / Math.max(1, size.x * size.y),
