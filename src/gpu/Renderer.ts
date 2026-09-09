@@ -63,6 +63,8 @@ export class GameRenderer {
   private debugContactWorldX = 0;
   private debugContactWorldY = 0;
   private appliedPixelRatio = 1;
+  private landscapeMobileComposition = false;
+  private lastPlayerWorldY = 0;
   readonly preparationTiming = new TimingCounter();
   readonly submissionTiming = new TimingCounter();
   readonly npcRenderTiming = new TimingCounter();
@@ -72,6 +74,7 @@ export class GameRenderer {
     seed: number,
     cameraTestMode: boolean,
     private readonly performanceConfig: PerformanceConfig,
+    private readonly mobileCameraMode: 'landscape' | 'legacy' = 'landscape',
   ) {
     this.renderer = new WebGPURenderer({
       canvas,
@@ -137,11 +140,15 @@ export class GameRenderer {
   }
 
   updateCamera(state: Readonly<SkiState>, deltaSeconds: number): void {
+    this.lastPlayerWorldY = state.position.y;
     const speed = Math.hypot(state.velocityX, state.velocityY);
     this.cameraWorldX +=
       (state.position.x - this.cameraWorldX) * (1 - Math.exp(-deltaSeconds * 4.2));
     const speedLookAhead = Math.max(0, Math.min(1, (speed - 10) / 24));
-    const targetY = state.position.y + this.viewHeight * (0.19 + speedLookAhead * 0.055);
+    const baseLookAhead = this.landscapeMobileComposition ? 0.32 : 0.19;
+    const speedLookAheadRange = this.landscapeMobileComposition ? 0.025 : 0.055;
+    const targetY = state.position.y + this.viewHeight *
+      (baseLookAhead + speedLookAhead * speedLookAheadRange);
     this.cameraWorldY +=
       (targetY - this.cameraWorldY) * (1 - Math.exp(-deltaSeconds * 5.5));
     this.shakeTime = Math.max(0, this.shakeTime - deltaSeconds);
@@ -269,7 +276,8 @@ export class GameRenderer {
 
   resetCamera(state: Readonly<SkiState>): void {
     this.cameraWorldX = state.position.x;
-    this.cameraWorldY = state.position.y + this.viewHeight * 0.19;
+    this.cameraWorldY = state.position.y + this.viewHeight *
+      (this.landscapeMobileComposition ? 0.32 : 0.19);
   }
 
   recordTrail(state: Readonly<SkiState>, deltaSeconds: number): void {
@@ -341,6 +349,18 @@ export class GameRenderer {
     return this.appliedPixelRatio;
   }
 
+  get effectiveCameraScale(): number {
+    return this.viewHeight;
+  }
+
+  get mobileComposition(): string {
+    return this.landscapeMobileComposition ? 'landscape-lookahead' : 'responsive-default';
+  }
+
+  skierScreenYPercent(state: Readonly<SkiState>): number {
+    return (0.5 - (this.cameraWorldY - state.position.y) / this.viewHeight) * 100;
+  }
+
   resizeToViewport(): void {
     this.resize();
   }
@@ -356,7 +376,16 @@ export class GameRenderer {
     this.renderer.setPixelRatio(this.appliedPixelRatio);
     this.renderer.setSize(size.x, size.y, false);
     const aspect = size.x / size.y;
-    this.viewHeight = aspect < 0.72 ? 94 : aspect < 1.15 ? 86 : BASE_VIEW_HEIGHT;
+    const previousLandscapeComposition = this.landscapeMobileComposition;
+    this.landscapeMobileComposition = this.mobileCameraMode === 'landscape' &&
+      matchMedia('(pointer: coarse)').matches && aspect > 1.15;
+    this.viewHeight = this.landscapeMobileComposition
+      ? 88
+      : aspect < 0.72 ? 94 : aspect < 1.15 ? 86 : BASE_VIEW_HEIGHT;
+    if (previousLandscapeComposition !== this.landscapeMobileComposition) {
+      this.cameraWorldY = this.lastPlayerWorldY + this.viewHeight *
+        (this.landscapeMobileComposition ? 0.32 : 0.19);
+    }
     this.viewWidth = this.viewHeight * aspect;
     this.snowMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.markerMesh.scale.set(this.viewWidth, this.viewHeight, 1);

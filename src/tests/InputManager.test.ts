@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolvePointerGesture } from '../input/InputManager';
+import { resolvePointerGesture, resolveTouchSteering } from '../input/InputManager';
 import {
   applyGamepadDeadZone,
   resolveStandardGamepad,
@@ -27,6 +27,24 @@ describe('two-axis pointer gestures', () => {
       brake: false,
       tuck: true,
     });
+  });
+});
+
+describe('split-hand touch steering', () => {
+  it('ignores thumb drift inside the dead zone', () => {
+    expect(resolveTouchSteering(7.9, 844)).toBe(0);
+    expect(resolveTouchSteering(-7.9, 844)).toBe(0);
+  });
+
+  it('provides progressive analog steering and saturates at a hard carve', () => {
+    const light = resolveTouchSteering(24, 844);
+    const medium = resolveTouchSteering(58, 844);
+    const hard = resolveTouchSteering(140, 844);
+    expect(light).toBeGreaterThan(0);
+    expect(light).toBeLessThan(medium);
+    expect(medium).toBeLessThan(hard);
+    expect(hard).toBe(1);
+    expect(resolveTouchSteering(-58, 844)).toBeCloseTo(-medium);
   });
 });
 

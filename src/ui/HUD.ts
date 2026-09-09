@@ -3,7 +3,7 @@ import type { SkiState } from '../simulation/SkiPhysics';
 import type { GameConfig } from '../app/config';
 import { BUILD_ID } from '../app/build';
 import type { NpcMetrics } from '../simulation/NpcSystem';
-import type { InputMethod } from '../input/InputManager';
+import type { InputMethod, TouchActionElements, TouchDiagnostics } from '../input/InputManager';
 
 export class HUD {
   private readonly distance: HTMLElement;
@@ -15,6 +15,12 @@ export class HUD {
   private readonly controllerToast: HTMLElement;
   private readonly pauseOverlay: HTMLElement;
   private readonly pauseButton: HTMLButtonElement;
+  private readonly brakeButton: HTMLButtonElement;
+  private readonly tuckButton: HTMLButtonElement;
+  private readonly touchDebug: HTMLElement;
+  private readonly touchDebugOrigin: HTMLElement;
+  private readonly touchDebugCurrent: HTMLElement;
+  private readonly touchDebugVector: HTMLElement;
   private controllerConnected = false;
   private inputMethod: InputMethod = navigator.maxTouchPoints > 0 ? 'touch' : 'keyboard';
   private toastTimer = 0;
@@ -24,6 +30,7 @@ export class HUD {
   private debugVisible = new URLSearchParams(location.search).has('debug');
 
   constructor(root: HTMLElement, config: GameConfig, onPauseToggle: () => void) {
+    root.classList.toggle('touch-controls-legacy', config.mobileTouchScheme === 'drag');
     root.insertAdjacentHTML(
       'beforeend',
       `<header class="hud" aria-label="Run information">
@@ -35,8 +42,17 @@ export class HUD {
       </header>
       <div class="hint">
         <span data-keyboard-help><kbd>A</kbd><kbd>D</kbd> carve <i>•</i> <kbd>W</kbd> brake <i>•</i> <kbd>S</kbd> tuck <i>•</i> drag in 8 directions${config.developmentMode ? ' <i>•</i> <kbd>G</kbd> poses' : ''}</span>
-        <span data-touch-help hidden>Drag sideways to carve <i>•</i> up to brake <i>•</i> down to tuck</span>
+        <span data-touch-help hidden>${config.mobileTouchScheme === 'split'
+          ? 'Left thumb carves <i>•</i> hold BRAKE or TUCK with your right thumb'
+          : 'Drag sideways to carve <i>•</i> up to brake <i>•</i> down to tuck'}</span>
         <span data-controller-help hidden>Left stick steer/up brake/down tuck <i>•</i> triggers brake/tuck <i>•</i> Menu pause <i>•</i> primary confirm <i>•</i> top face restart</span>
+      </div>
+      <div class="touch-actions" aria-label="Touch speed controls">
+        <button class="touch-action touch-action--brake" type="button"><span>BRAKE</span><small>SLOW / PLOW</small></button>
+        <button class="touch-action touch-action--tuck" type="button"><span>TUCK</span><small>MAX SPEED</small></button>
+      </div>
+      <div class="touch-debug${config.touchDebugMode ? ' visible' : ''}" aria-hidden="true">
+        <i data-touch-origin></i><i data-touch-current></i><b data-touch-vector></b>
       </div>
       <button class="mobile-pause" type="button" aria-label="Pause game">Pause</button>
       <div class="controller-toast" role="status" aria-live="polite"></div>
@@ -57,6 +73,12 @@ export class HUD {
     this.controllerToast = root.querySelector('.controller-toast')!;
     this.pauseOverlay = root.querySelector('.pause-overlay')!;
     this.pauseButton = root.querySelector('.mobile-pause')!;
+    this.brakeButton = root.querySelector('.touch-action--brake')!;
+    this.tuckButton = root.querySelector('.touch-action--tuck')!;
+    this.touchDebug = root.querySelector('.touch-debug')!;
+    this.touchDebugOrigin = root.querySelector('[data-touch-origin]')!;
+    this.touchDebugCurrent = root.querySelector('[data-touch-current]')!;
+    this.touchDebugVector = root.querySelector('[data-touch-vector]')!;
     this.pauseButton.addEventListener('click', onPauseToggle);
     root.querySelector('[data-resume]')!.addEventListener('click', onPauseToggle);
     addEventListener('keydown', (event) => {
@@ -91,6 +113,25 @@ export class HUD {
     this.pauseOverlay.classList.toggle('visible', paused);
     this.pauseButton.textContent = paused ? 'Resume' : 'Pause';
     this.pauseButton.setAttribute('aria-label', paused ? 'Resume game' : 'Pause game');
+  }
+
+  get touchActionElements(): TouchActionElements {
+    return { brake: this.brakeButton, tuck: this.tuckButton };
+  }
+
+  updateTouchDiagnostics(diagnostics: Readonly<TouchDiagnostics>): void {
+    if (!this.touchDebug.classList.contains('visible')) return;
+    this.touchDebug.classList.toggle('active', diagnostics.steeringActive);
+    this.touchDebug.dataset.steer = diagnostics.steer.toFixed(2);
+    this.touchDebug.dataset.action = diagnostics.action;
+    this.touchDebugOrigin.style.transform = `translate3d(${diagnostics.originX}px, ${diagnostics.originY}px, 0)`;
+    this.touchDebugCurrent.style.transform = `translate3d(${diagnostics.currentX}px, ${diagnostics.currentY}px, 0)`;
+    const deltaX = diagnostics.currentX - diagnostics.originX;
+    const deltaY = diagnostics.currentY - diagnostics.originY;
+    const length = Math.hypot(deltaX, deltaY);
+    const angle = Math.atan2(deltaY, deltaX);
+    this.touchDebugVector.style.width = `${length}px`;
+    this.touchDebugVector.style.transform = `translate3d(${diagnostics.originX}px, ${diagnostics.originY}px, 0) rotate(${angle}rad)`;
   }
 
   private updateHelp(): void {
@@ -143,6 +184,10 @@ CANVAS <em>${diagnostics.canvasPixelWidth ?? 0} × ${diagnostics.canvasPixelHeig
 PIXELS <em>${(Number(diagnostics.canvasPixels ?? 0) / 1_000_000).toFixed(2)} MP</em>
 DPR <em>${Number(diagnostics.devicePixelRatio ?? devicePixelRatio).toFixed(2)} → ${Number(diagnostics.renderPixelRatio ?? 1).toFixed(2)}</em>
 INPUT <em>${Number(diagnostics.inputSteer ?? 0).toFixed(2)} / ${diagnostics.inputBrake ?? 'false'} / ${diagnostics.inputTuck ?? 'false'}</em>
+TOUCH <em>${diagnostics.mobileControlScheme ?? 'n/a'} · ${diagnostics.touchAction ?? 'neutral'}</em>
+TOUCH XY <em>${Number(diagnostics.touchSteeringOriginX ?? 0).toFixed(0)},${Number(diagnostics.touchSteeringOriginY ?? 0).toFixed(0)} → ${Number(diagnostics.touchSteeringCurrentX ?? 0).toFixed(0)},${Number(diagnostics.touchSteeringCurrentY ?? 0).toFixed(0)}</em>
+CAMERA <em>${diagnostics.cameraComposition ?? 'default'} · ${Number(diagnostics.effectiveCameraScale ?? 0).toFixed(1)}</em>
+SKIER Y <em>${Number(diagnostics.skierScreenYPercent ?? 0).toFixed(1)}%</em>
 CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>

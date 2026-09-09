@@ -61,6 +61,7 @@ export class Game {
       config.seed,
       config.cameraTestMode,
       config.performance,
+      config.mobileCameraMode,
     );
     this.collision = new CollisionSystem(config.seed);
     this.replay = new ReplaySystem(config.seed, config.replay);
@@ -73,6 +74,9 @@ export class Game {
       canvas,
       (connected) => this.hud.setControllerConnected(connected),
       (method) => this.hud.setInputMethod(method),
+      undefined,
+      this.hud.touchActionElements,
+      config.mobileTouchScheme,
     );
     this.crashOverlay = new CrashOverlay(root, () => this.restart());
     root.classList.toggle('performance-ui-disabled', config.performance.disabled.has('ui'));
@@ -324,6 +328,8 @@ export class Game {
     const state = this.physics.state;
     this.origin.update(state.position);
     const snapshot = this.metrics.push(frameMs);
+    const touchDiagnostics = this.input.touchDiagnostics;
+    this.hud.updateTouchDiagnostics(touchDiagnostics);
     if (!this.paused || this.renderWhilePaused) {
       this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
       this.renderWhilePaused = false;
@@ -350,6 +356,16 @@ export class Game {
       inputSteer: this.input.state.steer,
       inputBrake: String(this.input.state.brake),
       inputTuck: String(this.input.state.tuck),
+      mobileControlScheme: touchDiagnostics.scheme,
+      touchSteeringActive: String(touchDiagnostics.steeringActive),
+      touchSteeringOriginX: touchDiagnostics.originX,
+      touchSteeringOriginY: touchDiagnostics.originY,
+      touchSteeringCurrentX: touchDiagnostics.currentX,
+      touchSteeringCurrentY: touchDiagnostics.currentY,
+      touchAction: touchDiagnostics.action,
+      cameraComposition: this.renderer.mobileComposition,
+      skierScreenYPercent: this.renderer.skierScreenYPercent(state),
+      effectiveCameraScale: this.renderer.effectiveCameraScale,
       visibility: document.visibilityState,
       orientation: matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape',
       npcActive: this.npcs.metrics.active,

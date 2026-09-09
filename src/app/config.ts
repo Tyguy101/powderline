@@ -11,6 +11,9 @@ export interface GameConfig {
   readonly poseGalleryMode: boolean;
   readonly crashLabMode: boolean;
   readonly npcLabMode: boolean;
+  readonly touchDebugMode: boolean;
+  readonly mobileTouchScheme: 'split' | 'drag';
+  readonly mobileCameraMode: 'landscape' | 'legacy';
   readonly replay: string | null;
   readonly performance: PerformanceConfig;
 }
@@ -26,17 +29,23 @@ const quality = query.get('quality');
 const replay = query.get('replay');
 const replayWorldSeed = replaySeed(replay);
 const disabled = new Set((query.get('disable') ?? '').split(',').filter(Boolean));
+const developmentMode = import.meta.env.DEV || query.has('dev');
 
 export const GAME_CONFIG: GameConfig = {
   seed: replayWorldSeed ?? Number(query.get('seed') ?? 0x51f15e),
   fixedStepSeconds: 1 / 60,
   maxFrameSeconds: 0.2,
   rebaseDistance: 4096,
-  developmentMode: import.meta.env.DEV || query.has('dev'),
+  developmentMode,
   cameraTestMode: query.has('cameraTest'),
   poseGalleryMode: query.has('poseGallery'),
   crashLabMode: query.has('crashLab'),
   npcLabMode: query.has('npcLab'),
+  touchDebugMode: developmentMode && query.has('touchDebug'),
+  mobileTouchScheme:
+    developmentMode && query.get('mobileControls') === 'drag' ? 'drag' : 'split',
+  mobileCameraMode:
+    developmentMode && query.get('mobileCamera') === 'legacy' ? 'legacy' : 'landscape',
   replay: replayWorldSeed === null ? null : replay,
   performance: {
     disabled,

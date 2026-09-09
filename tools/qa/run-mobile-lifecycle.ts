@@ -28,6 +28,13 @@ interface Snapshot {
   paused: boolean;
   touchAction: string;
   overflow: string;
+  inputSteer: number;
+  inputBrake: boolean;
+  inputTuck: boolean;
+  mobileControlScheme: string;
+  cameraComposition: string;
+  skierScreenYPercent: number;
+  effectiveCameraScale: number;
 }
 
 const profiles: MobileProfile[] = [
@@ -114,6 +121,13 @@ async function readSnapshot(page: Page): Promise<Snapshot> {
       paused: metrics.paused === 'true',
       touchAction: canvas ? getComputedStyle(canvas).touchAction : '',
       overflow: getComputedStyle(document.documentElement).overflow,
+      inputSteer: Number(metrics.inputSteer),
+      inputBrake: metrics.inputBrake === 'true',
+      inputTuck: metrics.inputTuck === 'true',
+      mobileControlScheme: String(metrics.mobileControlScheme),
+      cameraComposition: String(metrics.cameraComposition),
+      skierScreenYPercent: Number(metrics.skierScreenYPercent),
+      effectiveCameraScale: Number(metrics.effectiveCameraScale),
     };
   });
 }
@@ -156,6 +170,14 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
   const box = await pause.boundingBox();
   assert(box && box.width >= 44 && box.height >= 44, 'Mobile pause target is smaller than 44px.');
   assert(await page.locator('[data-touch-help]').isVisible(), 'Touch-specific help is not visible.');
+  const brake = page.locator('.touch-action--brake');
+  const tuck = page.locator('.touch-action--tuck');
+  const brakeBox = await brake.boundingBox();
+  const tuckBox = await tuck.boundingBox();
+  assert(brakeBox && brakeBox.width >= 70 && brakeBox.height >= 70,
+    'BRAKE touch target is too small.');
+  assert(tuckBox && tuckBox.width >= 70 && tuckBox.height >= 70,
+    'TUCK touch target is too small.');
   await pause.click();
   await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.paused === 'true');
   const resume = page.locator('[data-resume]');
@@ -182,6 +204,78 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
   assert(Math.abs(restored.worldY - hiddenY) < 0.001, 'Background interval advanced simulation.');
   await page.locator('[data-resume]').click();
   await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.paused === 'false');
+
+  assert(brakeBox && tuckBox, 'Touch action bounds are unavailable.');
+  const canvasBox = await page.locator('#game-canvas').boundingBox();
+  assert(canvasBox, 'Canvas bounds are unavailable for touch testing.');
+  const emitPointer = async (
+    selector: string,
+    type: string,
+    pointerId: number,
+    clientX: number,
+    clientY: number,
+  ): Promise<void> => {
+    await page.locator(selector).dispatchEvent(type, {
+      bubbles: true,
+      cancelable: true,
+      pointerId,
+      pointerType: 'touch',
+      isPrimary: pointerId === 41,
+      clientX,
+      clientY,
+      buttons: type === 'pointerup' ? 0 : 1,
+    });
+  };
+  const originX = canvasBox.x + Math.min(150, canvasBox.width * 0.28);
+  const originY = canvasBox.y + canvasBox.height * 0.56;
+  await emitPointer('#game-canvas', 'pointerdown', 41, originX, originY);
+  await emitPointer('#game-canvas', 'pointermove', 41, originX + 62, originY + 90);
+  await page.waitForFunction(() => Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputSteer) > 0.3);
+  let touch = await readSnapshot(page);
+  assert(!touch.inputBrake && !touch.inputTuck,
+    'Vertical steering-thumb drift changed speed mode.');
+
+  await emitPointer(
+    '.touch-action--brake',
+    'pointerdown',
+    42,
+    brakeBox.x + brakeBox.width / 2,
+    brakeBox.y + brakeBox.height / 2,
+  );
+  await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputBrake === 'true');
+  touch = await readSnapshot(page);
+  assert(touch.inputSteer > 0.3 && touch.inputBrake,
+    'BRAKE did not remain active alongside steering.');
+
+  await emitPointer('#game-canvas', 'pointermove', 41, originX - 70, originY - 80);
+  await page.waitForFunction(() => Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputSteer) < -0.3);
+  touch = await readSnapshot(page);
+  assert(touch.inputBrake, 'Changing carve direction stole the BRAKE touch.');
+
+  await emitPointer(
+    '.touch-action--brake',
+    'pointermove',
+    42,
+    tuckBox.x + tuckBox.width / 2,
+    tuckBox.y + tuckBox.height / 2,
+  );
+  await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputTuck === 'true');
+  touch = await readSnapshot(page);
+  assert(!touch.inputBrake && touch.inputTuck && touch.inputSteer < -0.3,
+    'BRAKE to TUCK switching interrupted steering or left BRAKE active.');
+
+  await emitPointer('#game-canvas', 'pointerup', 41, originX - 70, originY - 80);
+  await page.waitForFunction(() => Math.abs(Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputSteer)) < 0.01);
+  touch = await readSnapshot(page);
+  assert(touch.inputTuck, 'Releasing the steering thumb stole the TUCK touch.');
+  await emitPointer(
+    '.touch-action--brake',
+    'pointerup',
+    42,
+    tuckBox.x + tuckBox.width / 2,
+    tuckBox.y + tuckBox.height / 2,
+  );
+  await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputTuck === 'false');
 }
 
 async function runProfile(browser: Browser, profile: MobileProfile): Promise<Record<string, unknown>> {
@@ -192,6 +286,12 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
     isMobile: true,
   });
   const page = await context.newPage();
+  await page.addInitScript(() => {
+    // Synthetic PointerEvents used below are not entered into Chromium's native
+    // pointer-capture registry. The app still executes its ownership logic.
+    HTMLElement.prototype.setPointerCapture = () => undefined;
+    HTMLElement.prototype.releasePointerCapture = () => undefined;
+  });
   const errors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(message.text());
@@ -215,6 +315,15 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
   await page.waitForTimeout(500);
   const rotated = await readSnapshot(page);
   verifyLayout(rotated, profile.rotated, `${profile.name} rotated`);
+  if (profile.rotated.width > profile.rotated.height) {
+    assert(rotated.mobileControlScheme === 'split', `${profile.name}: split touch scheme is not active.`);
+    assert(rotated.cameraComposition === 'landscape-lookahead',
+      `${profile.name}: landscape camera composition is not active.`);
+    assert(rotated.skierScreenYPercent >= 14 && rotated.skierScreenYPercent <= 21,
+      `${profile.name}: skier is outside the 15–20% landscape target region (${rotated.skierScreenYPercent.toFixed(2)}%).`);
+    assert(rotated.effectiveCameraScale === 88,
+      `${profile.name}: landscape camera scale was not applied.`);
+  }
 
   // Exercise resize while paused, which approximates orientation changing while
   // a mobile browser or wrapper has suspended gameplay.
