@@ -10,10 +10,11 @@ meaningful milestone.
 ## Code and deployment identity
 
 - Git branch: `main`
-- Git SHA: update after the migration commit
+- Git SHA: `8b5bc8a` (full SHA: `8b5bc8a0c3f557f77c3b51437a19e8d55b1f0d07`)
 - GitHub: https://github.com/Tyguy101/powderline
 - Production: https://powderline-lake.vercel.app/
-- Vercel build ID/commit: verify after push; do not infer from a preview URL
+- Vercel build ID/commit: pending automatic production deployment; verify against
+  `8b5bc8a` before release sign-off
 - Deterministic seed: `424242` for benchmark smoke/replay checks
 
 ## Material changes
