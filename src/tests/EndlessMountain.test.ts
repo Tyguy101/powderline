@@ -209,6 +209,18 @@ describe('Endless Mountain', () => {
     }
   });
 
+  it('keeps the passing powder hazardous until the wake clears', () => {
+    const mountain = new MountainRun(1729, { trail: 'avalanche', scenario: 'encounter' });
+    const wave = mountain.wave!;
+    const safe = { x: wave.safeSide * (wave.safeEdge + 7), y: wave.trigger + 30 };
+    mountain.avalanche = 'chasing';
+    mountain.front = safe.y + 15;
+    expect(mountain.advance(safe, safe, false, DT)).toBeUndefined();
+    expect(mountain.avalanche).toBe('escaped');
+    const hot = { x: 0, y: safe.y + 1 };
+    expect(mountain.advance(safe, hot, false, DT)).toBe('caught');
+  });
+
   it('retains only current and previous sections over a long run and caps replay storage', () => {
     const settings = { trail: 'pine', scenario: 'summit', npcCount: 5, npcSimulation: true, collisions: true } as const;
     const run = new MountainRun(1729, settings);

@@ -115,7 +115,7 @@ export class MountainRenderer {
       this.terrain.clear(run.section.center, band * 18);
       this.course.clear(run.section.center, band * 18);
       for (const section of [run.previous, run.section]) {
-        if (section && min < section.end && max > section.start - 35) {
+        if (section && min < section.end + 32 && max > section.start - 35) {
           this.section(section, min, max, section === run.section ? run.gateIndex : -1);
         }
       }
@@ -303,6 +303,10 @@ export class MountainRenderer {
       const merge = center + offer.lane * 9;
       this.terrain.strip('#e4f0f3', merge - 3, merge + 3, entry + 20, x - 7.4, x + 7.4, end - 44);
       this.terrain.strip('#e4f0f3', x - 7.4, x + 7.4, end - 44, x - 8.6, x + 8.6, end);
+      const downhill = x + offer.lane * 4.2;
+      this.terrain.strip('#e4f0f3', x - 8.6, x + 8.6, end, downhill - 6.6, downhill + 6.6, end + 15);
+      this.terrain.strip('#edf6f7', downhill - 6.6, downhill + 6.6, end + 15,
+        downhill - 2, downhill + 2, end + 32);
       for (const offset of [-4.2, 4.2]) {
         this.terrain.strip('#dcebef', merge + offset - 0.24, merge + offset + 0.24, entry + 30,
           x + offset - 0.4, x + offset + 0.4, end - 44);

@@ -20,6 +20,7 @@ export class MountainRun {
   waveIndex = 0;
   wavesCleared = 0;
   npcEngulfments = 0;
+  private caughtFront = 0;
   private checkpointGates = 0;
 
   constructor(readonly seed: number, readonly start: MountainStart) {
@@ -53,6 +54,7 @@ export class MountainRun {
     this.cleanGates = this.checkpointGates;
     this.avalanche = 'quiet';
     this.front = 0;
+    this.caughtFront = 0;
     this.waveIndex = 0;
     this.wavesCleared = 0;
     this.npcEngulfments = 0;
@@ -96,7 +98,11 @@ export class MountainRun {
     this.front = Math.min(this.front + this.wave.speed * delta * 0.32, this.caughtFront + 23);
   }
 
-  private caughtFront = 0;
+  private catchSkier(): true {
+    this.avalanche = 'caught';
+    this.caughtFront = this.front;
+    return true;
+  }
 
   private advanceSlide(position: Readonly<WorldPosition>, delta: number): boolean {
     let wave = this.wave;
@@ -105,7 +111,7 @@ export class MountainRun {
       const next = this.section.waves[this.waveIndex + 1];
       if (!next || position.y < next.warningAt) {
         if (this.front < position.y + 160) this.front += wave.speed * delta;
-        return false;
+        return this.engulfed(position.x, position.y) ? this.catchSkier() : false;
       }
       this.waveIndex += 1;
       this.front = 0;
@@ -119,11 +125,7 @@ export class MountainRun {
     }
     if (this.avalanche !== 'chasing') return false;
     this.front += wave.speed * delta;
-    if (this.engulfed(position.x, position.y)) {
-      this.avalanche = 'caught';
-      this.caughtFront = this.front;
-      return true;
-    }
+    if (this.engulfed(position.x, position.y)) return this.catchSkier();
     if (this.front >= position.y + 9 &&
       (position.x - this.section.center) * wave.safeSide >= wave.safeEdge) {
       this.wavesCleared += 1;
