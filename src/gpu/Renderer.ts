@@ -27,6 +27,8 @@ import type { NpcState } from '../simulation/NpcSystem';
 import type { PerformanceConfig } from '../app/config';
 import { TimingCounter } from '../instrumentation/PerformanceCounters';
 import { WorldFeatureRenderer } from './WorldFeatureRenderer';
+import { MountainRenderer } from './MountainRenderer';
+import type { MountainRun } from '../simulation/MountainRun';
 
 const BASE_VIEW_HEIGHT = 80;
 
@@ -37,6 +39,7 @@ export class GameRenderer {
   private readonly snow;
   private readonly markers;
   private readonly features: WorldFeatureRenderer;
+  private readonly mountainRenderer: MountainRenderer | undefined;
   private readonly skier;
   private readonly collisionDebug;
   private readonly crashTrail;
@@ -75,6 +78,7 @@ export class GameRenderer {
     cameraTestMode: boolean,
     private readonly performanceConfig: PerformanceConfig,
     private readonly mobileCameraMode: 'landscape' | 'legacy' = 'landscape',
+    private readonly mountain?: MountainRun,
   ) {
     this.renderer = new WebGPURenderer({
       canvas,
@@ -86,7 +90,9 @@ export class GameRenderer {
     this.markersVisible = cameraTestMode;
     this.snow = createSnowShader(seed);
     this.markers = createCameraMarkerShader(seed);
-    this.features = new WorldFeatureRenderer(seed);
+    this.features = new WorldFeatureRenderer(seed, mountain);
+    this.mountainRenderer = mountain && !performanceConfig.disabled.has('mountain') ? new MountainRenderer() : undefined;
+    if (this.mountainRenderer) this.scene.add(...this.mountainRenderer.meshes);
     this.skier = createSkierShader();
     this.collisionDebug = createCollisionDebugShader();
     this.crashTrail = createCrashTrailShader();
@@ -167,6 +173,7 @@ export class GameRenderer {
     this.snow.worldY.value = this.cameraWorldY - origin.y;
     this.markers.worldX.value = this.cameraWorldX - origin.x;
     this.markers.worldY.value = this.cameraWorldY - origin.y;
+    this.mountainRenderer?.update(this.mountain!, this.cameraWorldX, this.cameraWorldY, this.viewHeight);
     if (this.features.mesh.visible) {
       this.features.update(this.cameraWorldX, this.cameraWorldY, this.viewWidth, this.viewHeight);
     }
@@ -321,7 +328,8 @@ export class GameRenderer {
   }
 
   get drawCalls(): number {
-    return Number(this.snowMesh.visible) + Number(this.features.mesh.visible) +
+    return (this.mountainRenderer?.drawCalls ?? 0) +
+      Number(this.snowMesh.visible) + Number(this.features.mesh.visible) +
       Number(this.tracks.mesh.visible) + Number(this.npcs.mesh.visible) +
       Number(this.skierMesh.visible) + Number(this.treeForegroundMesh.visible) +
       Number(this.crashTrailMesh.visible) +

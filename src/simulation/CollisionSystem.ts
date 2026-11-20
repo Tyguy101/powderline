@@ -1,5 +1,6 @@
 import type { FeatureDescriptor } from '../world/FeatureGeneratorCPU';
-import { FeatureGeneratorCPU } from '../world/FeatureGeneratorCPU';
+import { FeatureGeneratorCPU, type SectionSource } from '../world/FeatureGeneratorCPU';
+import { pathCenter, pathHalfWidth } from '../world/EndlessMountain';
 import type { SkiState } from './SkiPhysics';
 
 export const SKIER_COLLISION_RADIUS = 0.62;
@@ -32,8 +33,30 @@ export class CollisionSystem {
     contactOffset: 0,
   };
 
-  constructor(seed: number) {
-    this.generator = new FeatureGeneratorCPU(seed);
+  constructor(seed: number, private readonly course?: SectionSource) {
+    this.generator = new FeatureGeneratorCPU(seed, course);
+  }
+
+  queryWall(state: Readonly<SkiState>): Readonly<CollisionContact> | null {
+    const section = this.course?.sectionAt(state.position.y);
+    if (!section) return null;
+    const { x, y } = state.position;
+    const center = pathCenter(section, y);
+    const side = Math.sign(x - center);
+    const edge = center + side * pathHalfWidth(section, y);
+    if ((x - edge) * side < -SKIER_COLLISION_RADIUS || side === 0) return null;
+    const downhillEdge = pathCenter(section, y + 0.5) + side * pathHalfWidth(section, y + 0.5);
+    const slope = (downhillEdge - edge) * 2;
+    const length = Math.hypot(1, slope);
+    this.contact.normalX = -side / length;
+    this.contact.normalY = side * slope / length;
+    this.contact.contactX = edge;
+    this.contact.contactY = y;
+    const speed = Math.max(0.01, Math.hypot(state.velocityX, state.velocityY));
+    this.contact.contactOffset = (state.velocityX * this.contact.normalY -
+      state.velocityY * this.contact.normalX) / speed;
+    Object.assign(this.hit, { id: section.id, type: 'rock', x: edge, y, radius: 0, scale: 1 });
+    return this.contact;
   }
 
   query(state: Readonly<SkiState>): Readonly<CollisionContact> | null {

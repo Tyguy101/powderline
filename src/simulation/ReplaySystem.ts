@@ -1,7 +1,9 @@
 import type { InputState } from '../input/InputState';
+import { isScenario, isTrail, type MountainStart } from '../world/EndlessMountain';
 
-// Increment whenever authoritative fixed-step physics changes.
-const REPLAY_VERSION = 5;
+const CLASSIC_VERSION = 5;
+const MOUNTAIN_VERSION = 6;
+const MAX_MOUNTAIN_RUNS = 16000;
 
 interface ReplayRun {
   frames: number;
@@ -13,6 +15,21 @@ export interface ReplayData {
   version: number;
   seed: number;
   runs: ReplayRun[];
+  mountain?: MountainReplaySettings;
+}
+
+export interface MountainReplaySettings extends MountainStart {
+  npcCount: number;
+  npcSimulation: boolean;
+  collisions: boolean;
+}
+
+export interface ReplayCheckpoint {
+  length: number;
+  lastFrames: number;
+  playbackRun: number;
+  playbackFrame: number;
+  overflow: boolean;
 }
 
 function encodeBase64Url(value: string): string {
@@ -27,11 +44,19 @@ function decodeBase64Url(value: string): string {
 export function deserializeReplay(serialized: string): ReplayData {
   const parsed = JSON.parse(decodeBase64Url(serialized)) as Partial<ReplayData>;
   if (
-    parsed.version !== REPLAY_VERSION ||
+    (parsed.version !== CLASSIC_VERSION && parsed.version !== MOUNTAIN_VERSION) ||
     !Number.isInteger(parsed.seed) ||
     !Array.isArray(parsed.runs)
   ) {
     throw new Error('Unsupported or invalid Powderline replay.');
+  }
+  if (parsed.version === MOUNTAIN_VERSION && (
+    !parsed.mountain || !isTrail(parsed.mountain.trail) || !isScenario(parsed.mountain.scenario) ||
+    (parsed.mountain.npcCount !== 3 && parsed.mountain.npcCount !== 5) ||
+    typeof parsed.mountain.npcSimulation !== 'boolean' || typeof parsed.mountain.collisions !== 'boolean' ||
+    parsed.runs.length > MAX_MOUNTAIN_RUNS
+  )) {
+    throw new Error('Invalid Endless Mountain replay settings.');
   }
   const runs = parsed.runs.map((run) => {
     if (
@@ -48,7 +73,12 @@ export function deserializeReplay(serialized: string): ReplayData {
     }
     return { frames: run.frames, steer: run.steer, flags: run.flags };
   });
-  return { version: REPLAY_VERSION, seed: parsed.seed!, runs };
+  return {
+    version: parsed.version,
+    seed: parsed.seed!,
+    runs,
+    mountain: parsed.version === MOUNTAIN_VERSION ? parsed.mountain : undefined,
+  };
 }
 
 export function replaySeed(serialized: string | null): number | null {
@@ -62,7 +92,8 @@ export function replaySeed(serialized: string | null): number | null {
 
 export class ReplaySystem {
   private runs: ReplayRun[] = [];
-  private playback: ReplayData | null;
+  private readonly playback: ReplayData | null;
+  private overflow = false;
   private playbackRun = 0;
   private playbackFrame = 0;
   private readonly sampled: InputState = { steer: 0, brake: false, tuck: false };
@@ -71,6 +102,7 @@ export class ReplaySystem {
   constructor(
     private readonly seed: number,
     serialized: string | null,
+    private readonly mountain?: MountainReplaySettings,
   ) {
     this.source = serialized;
     this.playback = serialized ? deserializeReplay(serialized) : null;
@@ -87,8 +119,10 @@ export class ReplaySystem {
     const last = this.runs.at(-1);
     if (last && last.steer === steer && last.flags === flags && last.frames < 65535) {
       last.frames += 1;
-    } else {
+    } else if (!this.mountain || this.runs.length < MAX_MOUNTAIN_RUNS) {
       this.runs.push({ frames: 1, steer, flags });
+    } else {
+      this.overflow = true;
     }
     this.writeSample(steer, flags);
     return this.sampled;
@@ -96,15 +130,40 @@ export class ReplaySystem {
 
   serialize(): string {
     if (this.source) return this.source;
+    if (this.overflow) return '';
     return encodeBase64Url(
-      JSON.stringify({ version: REPLAY_VERSION, seed: this.seed >>> 0, runs: this.runs }),
+      JSON.stringify({
+        version: this.mountain ? MOUNTAIN_VERSION : CLASSIC_VERSION,
+        seed: this.seed >>> 0,
+        runs: this.runs,
+        mountain: this.mountain,
+      }),
     );
+  }
+
+  get recordingRuns(): number {
+    return this.runs.length;
+  }
+
+  checkpoint(): ReplayCheckpoint {
+    return { length: this.runs.length, lastFrames: this.runs.at(-1)?.frames ?? 0,
+      playbackRun: this.playbackRun, playbackFrame: this.playbackFrame, overflow: this.overflow };
+  }
+
+  restore(checkpoint: ReplayCheckpoint): void {
+    this.runs.length = checkpoint.length;
+    const last = this.runs.at(-1);
+    if (last) last.frames = checkpoint.lastFrames;
+    this.playbackRun = checkpoint.playbackRun;
+    this.playbackFrame = checkpoint.playbackFrame;
+    this.overflow = checkpoint.overflow;
   }
 
   reset(): void {
     this.runs = [];
     this.playbackRun = 0;
     this.playbackFrame = 0;
+    this.overflow = false;
   }
 
   private samplePlayback(): Readonly<InputState> {

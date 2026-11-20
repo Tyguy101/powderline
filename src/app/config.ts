@@ -1,3 +1,6 @@
+import { deserializeReplay, type MountainReplaySettings } from '../simulation/ReplaySystem';
+import { isScenario, isTrail } from '../world/EndlessMountain';
+
 export type QualityPreset = 'potato' | 'low' | 'medium' | 'high';
 
 export interface GameConfig {
@@ -15,6 +18,8 @@ export interface GameConfig {
   readonly mobileTouchScheme: 'split' | 'drag';
   readonly mobileCameraMode: 'landscape' | 'legacy';
   readonly replay: string | null;
+  readonly replayError: string | null;
+  readonly mountain: MountainReplaySettings | null;
   readonly performance: PerformanceConfig;
 }
 
@@ -26,13 +31,37 @@ export interface PerformanceConfig {
 
 const query = new URLSearchParams(location.search);
 const quality = query.get('quality');
-const replay = query.get('replay');
-const replayWorldSeed = replaySeed(replay);
+export function replayFromHash(hash: string): string | null {
+  return new URLSearchParams(hash.slice(1)).get('replay');
+}
+
+const replay = query.get('replay') ?? replayFromHash(location.hash);
+const replayData = readReplay(replay);
 const disabled = new Set((query.get('disable') ?? '').split(',').filter(Boolean));
 const developmentMode = import.meta.env.DEV || query.has('dev');
 
+function readReplay(value: string | null) {
+  if (!value) return null;
+  try {
+    return deserializeReplay(value);
+  } catch {
+    return null;
+  }
+}
+
+export function newRunSeed(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0]!;
+}
+
+const requestedSeed = query.get('seed');
+const explicitSeed = requestedSeed !== null && /^\d+$/.test(requestedSeed) && Number(requestedSeed) <= 0xffffffff;
+const requestedTrail = query.get('section');
+const requestedScenario = query.get('scenario');
+const classic = replayData ? !replayData.mountain : query.get('course') === 'classic';
+const seed = replayData?.seed ?? (explicitSeed ? Number(requestedSeed) : classic ? 0x51f15e : newRunSeed());
+
 export const GAME_CONFIG: GameConfig = {
-  seed: replayWorldSeed ?? Number(query.get('seed') ?? 0x51f15e),
+  seed,
   fixedStepSeconds: 1 / 60,
   maxFrameSeconds: 0.2,
   rebaseDistance: 4096,
@@ -46,7 +75,15 @@ export const GAME_CONFIG: GameConfig = {
     developmentMode && query.get('mobileControls') === 'drag' ? 'drag' : 'split',
   mobileCameraMode:
     developmentMode && query.get('mobileCamera') === 'legacy' ? 'legacy' : 'landscape',
-  replay: replayWorldSeed === null ? null : replay,
+  replay: replayData ? replay : null,
+  replayError: replay !== null && !replayData ? 'This replay is invalid or from an unsupported Powderline version.' : null,
+  mountain: classic ? null : replayData?.mountain ?? {
+    trail: isTrail(requestedTrail) ? requestedTrail : 'pine',
+    scenario: isScenario(requestedScenario) ? requestedScenario : 'summit',
+    npcCount: quality === 'potato' || quality === 'low' ? 3 : 5,
+    npcSimulation: !disabled.has('npcSim'),
+    collisions: !disabled.has('collisions'),
+  },
   performance: {
     disabled,
     renderScale: query.has('renderScale')
@@ -62,4 +99,3 @@ export const GAME_CONFIG: GameConfig = {
       ? quality
       : 'medium',
 };
-import { replaySeed } from '../simulation/ReplaySystem';

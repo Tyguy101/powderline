@@ -346,6 +346,28 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
   await page.screenshot({
     path: path.join(reportDirectory, `${profile.name}.png`),
   });
+  await page.goto('http://127.0.0.1:4175/?seed=1729&quality=low&scenario=fork');
+  const fork = page.getByRole('region', { name: 'Upcoming trail choices' });
+  await fork.waitFor({ state: 'visible' });
+  assert(await fork.locator('.mountain-choices > div').count() === 3, 'Trail preview is missing a choice.');
+  const forkLayouts = [];
+  for (const [label, viewport] of [['initial', profile.viewport], ['rotated', profile.rotated]] as const) {
+    await page.setViewportSize(viewport);
+    const preview = await fork.boundingBox();
+    const brake = await page.locator('.touch-action--brake').boundingBox();
+    const tuck = await page.locator('.touch-action--tuck').boundingBox();
+    assert(preview && preview.x >= 0 && preview.y >= 0 &&
+      preview.x + preview.width <= viewport.width + 1 && preview.y + preview.height <= viewport.height + 1,
+    `${profile.name}: trail preview is clipped in ${label} orientation.`);
+    for (const control of [brake, tuck]) {
+      assert(control && (
+        preview.x + preview.width <= control.x || control.x + control.width <= preview.x ||
+        preview.y + preview.height <= control.y || control.y + control.height <= preview.y
+      ), `${profile.name}: trail preview covers a speed control in ${label} orientation.`);
+    }
+    forkLayouts.push({ label, viewport, preview });
+    await page.screenshot({ path: path.join(reportDirectory, `${profile.name}-fork-${label}.png`) });
+  }
   assert(errors.length === 0, `${profile.name}: browser errors: ${errors.join(' | ')}`);
   await context.close();
   return {
@@ -354,6 +376,7 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
     pauseResume,
     rotated,
     restoredWhilePaused,
+    forkLayouts,
     errors,
     passed: true,
   };

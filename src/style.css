@@ -139,6 +139,67 @@ button, kbd { font: inherit; }
 .debug em { float: right; color: white; font-style: normal; }
 .performance-ui-disabled > :not(.game-shell) { display: none !important; }
 
+.mountain-ui { position: fixed; inset: 0; z-index: 3; pointer-events: none; }
+.mountain-ui [hidden] { display: none; }
+.mountain-trail {
+  position: absolute; top: max(67px, calc(var(--safe-top) + 45px));
+  left: max(28px, var(--safe-left)); max-width: min(300px, 46vw);
+  display: grid; justify-items: start; gap: 4px;
+  text-shadow: 0 1px 2px #f0fafb, 0 0 9px #fff;
+}
+.mountain-trail div { display: flex; align-items: center; gap: 8px; }
+.mountain-trail i { width: 9px; height: 9px; transform: rotate(45deg); background: var(--trail-color); }
+.mountain-trail strong { font-size: 18px; letter-spacing: -.035em; }
+.mountain-trail small { font-size: 11px; font-weight: 670; }
+.mountain-trail button {
+  min-height: 26px; margin-left: -6px; padding: 0 6px; color: #45606e;
+  border: 0; background: transparent; font-size: 10px; font-weight: 750;
+  pointer-events: auto; cursor: pointer;
+}
+.mountain-trail button:hover { text-decoration: underline; }
+.mountain-fork, .mountain-notice {
+  position: absolute; left: 50%; top: max(15px, var(--safe-top)); transform: translateX(-50%);
+  width: min(558px, calc(100vw - 36px)); padding: 10px 12px 11px; border-radius: 17px;
+  background: #123341f2; color: #f6fafa; border: 1px solid #ffffff46;
+  box-shadow: 0 7px 21px #16394838;
+}
+.mountain-fork header { display: flex; justify-content: space-between; gap: 8px; margin: 0 2px 7px; align-items: baseline; }
+.mountain-fork header b { font-size: 13px; }
+.mountain-fork header span { font-size: 11px; color: #cadee5; font-variant-numeric: tabular-nums; }
+.mountain-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.mountain-choices > div {
+  min-width: 0; padding: 5px 7px 7px; display: grid; align-content: start; gap: 2px;
+  background: #254756; border: 1px solid transparent; border-top: 3px solid var(--trail-color); border-radius: 7px;
+}
+.mountain-choices > div.selected { border-color: #d5eef0; border-top-color: var(--trail-color); background: #466c78; }
+.mountain-choices small { color: #c8e0e8; font-size: 10px; font-weight: 800; }
+.mountain-choices strong { font-size: clamp(11px, 1.5vw, 15px); letter-spacing: -.025em; line-height: 1.12; }
+.mountain-choices b { font-size: 9px; color: #f6e3bc; font-weight: 730; }
+.mountain-choices span { color: #e0eef2; font-size: 10px; line-height: 1.2; }
+.mountain-notice { width: max-content; max-width: 86vw; text-align: center; padding: 9px 14px; font-size: 13px; font-weight: 800; }
+.mountain-notice[data-state='warning'] { background: #704622f5; }
+.mountain-notice[data-state='chasing'] { background: #942738f5; }
+.mountain-notice[data-state='escaped'] { background: #176a59f5; }
+
+@media (max-width: 900px), (pointer: coarse) {
+  .mountain-fork { top: auto; bottom: max(13px, var(--safe-bottom)); width: min(470px, calc(100vw - 26px)); }
+  #app:has(.mountain-fork:not([hidden])) .hint { visibility: hidden; }
+}
+@media (max-width: 700px), (pointer: coarse) {
+  .mountain-trail { left: max(16px, var(--safe-left)); top: max(57px, calc(var(--safe-top) + 40px)); }
+  .mountain-trail strong { font-size: 14px; }
+  .mountain-trail small { font-size: 10px; }
+  .mountain-notice { top: auto; bottom: max(55px, calc(var(--safe-bottom) + 38px)); }
+}
+@media (pointer: coarse) and (orientation: landscape) {
+  .mountain-trail { left: max(77px, calc(var(--safe-left) + 70px)); top: max(58px, calc(var(--safe-top) + 45px)); }
+  .mountain-trail small { max-width: 150px; }
+  .mountain-fork { width: min(400px, 60vw); }
+}
+@media (max-width: 450px) {
+  .mountain-trail { max-width: 62vw; }
+}
+
 .pose-gallery {
   position: fixed; z-index: 6; left: 24px; top: 78px; display: none; width: min(330px, calc(100vw - 48px));
   padding: 14px; border: 1px solid rgba(16,49,58,.15); border-radius: 18px;

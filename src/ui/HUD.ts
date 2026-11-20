@@ -192,7 +192,10 @@ CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>
 WORLD <em>${state.position.x.toFixed(1)}, ${state.position.y.toFixed(1)}</em>
-SEED <em>${config.seed}</em>`;
+SEED <em>${config.seed}</em>${diagnostics.section ? `
+TRAIL <em>${diagnostics.section} · ${Number(diagnostics.sectionIndex) + 1}</em>
+GATES <em>${diagnostics.cleanGates} clean · ${diagnostics.gateStreak} streak</em>
+AVALANCHE <em>${diagnostics.avalanche}</em>` : ''}`;
     this.debug.dataset.build = BUILD_ID;
   }
 }

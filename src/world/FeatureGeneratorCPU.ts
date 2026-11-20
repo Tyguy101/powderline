@@ -1,7 +1,13 @@
 import { hashCoordinates } from '../core/SeededHash';
+import { describeSectionCell, type Section } from './EndlessMountain';
 
 export const FEATURE_CELL_SIZE = 12;
-export const FEATURE_MAX_RADIUS = 1.35;
+const FEATURE_MAX_RADIUS = 1.35;
+
+export interface SectionSource {
+  readonly revision: number;
+  sectionAt(y: number): Section | null;
+}
 
 export type FeatureType = 'none' | 'tree' | 'rock' | 'ramp';
 
@@ -81,7 +87,16 @@ export function describeFeature(
 export class FeatureGeneratorCPU {
   private readonly candidate: FeatureDescriptor = { ...EMPTY_FEATURE };
 
-  constructor(private readonly seed: number) {}
+  constructor(private readonly seed: number, private readonly course?: SectionSource) {}
+
+  describeCell(cellX: number, cellY: number, target: FeatureDescriptor): void {
+    if (!this.course) {
+      describeFeature(this.seed, cellX, cellY, target);
+      return;
+    }
+    const section = this.course.sectionAt((cellY + 0.5) * FEATURE_CELL_SIZE);
+    describeSectionCell(section, cellX, cellY, FEATURE_CELL_SIZE, target);
+  }
 
   findCollision(
     x: number,
@@ -89,7 +104,17 @@ export class FeatureGeneratorCPU {
     playerRadius: number,
     target: FeatureDescriptor,
   ): FeatureDescriptor | null {
-    const range = playerRadius + FEATURE_MAX_RADIUS;
+    const explicit = this.course?.sectionAt(y)?.features;
+    if (explicit) {
+      for (const feature of explicit) {
+        const dy = y - feature.y;
+        const radius = playerRadius + feature.radius;
+        if (Math.abs(dy) > radius || (x - feature.x) ** 2 + dy * dy >= radius ** 2) continue;
+        Object.assign(target, feature);
+        return target;
+      }
+    }
+    const range = playerRadius + (this.course ? 3 : FEATURE_MAX_RADIUS);
     const minCellX = Math.floor((x - range) / FEATURE_CELL_SIZE);
     const maxCellX = Math.floor((x + range) / FEATURE_CELL_SIZE);
     const minCellY = Math.floor((y - range) / FEATURE_CELL_SIZE);
@@ -97,7 +122,7 @@ export class FeatureGeneratorCPU {
 
     for (let cellY = minCellY; cellY <= maxCellY; cellY += 1) {
       for (let cellX = minCellX; cellX <= maxCellX; cellX += 1) {
-        describeFeature(this.seed, cellX, cellY, this.candidate);
+        this.describeCell(cellX, cellY, this.candidate);
         if (this.candidate.type === 'none') continue;
         const dx = x - this.candidate.x;
         const dy = y - this.candidate.y;

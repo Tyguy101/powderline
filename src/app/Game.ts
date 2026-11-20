@@ -4,9 +4,9 @@ import { GameRenderer } from '../gpu/Renderer';
 import { FrameMetrics } from '../instrumentation/FrameMetrics';
 import { InputManager } from '../input/InputManager';
 import type { InputState } from '../input/InputState';
-import { SkiPhysics } from '../simulation/SkiPhysics';
-import { CollisionSystem } from '../simulation/CollisionSystem';
-import { ReplaySystem } from '../simulation/ReplaySystem';
+import { SkiPhysics, type SkiCheckpoint } from '../simulation/SkiPhysics';
+import { CollisionSystem, SKIER_COLLISION_RADIUS } from '../simulation/CollisionSystem';
+import { ReplaySystem, type ReplayCheckpoint } from '../simulation/ReplaySystem';
 import { selectCrashReaction, type ImpactContext } from '../simulation/CrashReaction';
 import { CrashOverlay } from '../ui/CrashOverlay';
 import { HUD } from '../ui/HUD';
@@ -15,9 +15,12 @@ import { CrashLab } from '../ui/CrashLab';
 import { NpcLab } from '../ui/NpcLab';
 import { NpcSystem } from '../simulation/NpcSystem';
 import { BUILD_ID } from './build';
-import type { GameConfig } from './config';
+import { newRunSeed, type GameConfig } from './config';
 import { TimingCounter } from '../instrumentation/PerformanceCounters';
 import { LifecycleManager, type LifecyclePauseReason } from './LifecycleManager';
+import { MountainRun } from '../simulation/MountainRun';
+import { MountainHUD } from '../ui/MountainHUD';
+import { laneAt, pathCenter, pathHalfWidth } from '../world/EndlessMountain';
 
 export class Game {
   private readonly physics = new SkiPhysics();
@@ -31,9 +34,20 @@ export class Game {
   private readonly npcs: NpcSystem;
   private readonly crashOverlay: CrashOverlay;
   private readonly loop: FixedStepLoop;
+  private readonly mountain?: MountainRun;
+  private readonly mountainHUD?: MountainHUD;
+  private readonly before = { x: 0, y: 0 };
+  private checkpoint?: {
+    ski: SkiCheckpoint;
+    npcs: ReturnType<NpcSystem['checkpoint']>;
+    replay: ReplayCheckpoint;
+  };
+  private readonly collisionsEnabled: boolean;
+  private readonly npcSimulationEnabled: boolean;
   private poseInspectionActive = false;
   private npcInspectionActive = false;
   private crashPromptShown = false;
+  private labCrash = false;
   private paused = false;
   private renderWhilePaused = true;
   private readonly simulationTiming = new TimingCounter();
@@ -56,20 +70,26 @@ export class Game {
       <div class="vignette"></div>
     </main>`;
     const canvas = root.querySelector<HTMLCanvasElement>('#game-canvas')!;
+    this.mountain = config.mountain ? new MountainRun(config.seed, config.mountain) : undefined;
+    this.collisionsEnabled = config.mountain?.collisions ?? !config.performance.disabled.has('collisions');
+    this.npcSimulationEnabled = config.mountain?.npcSimulation ?? !config.performance.disabled.has('npcSim');
     this.renderer = new GameRenderer(
       canvas,
       config.seed,
       config.cameraTestMode,
       config.performance,
       config.mobileCameraMode,
+      this.mountain,
     );
-    this.collision = new CollisionSystem(config.seed);
-    this.replay = new ReplaySystem(config.seed, config.replay);
+    this.collision = new CollisionSystem(config.seed, this.mountain);
+    this.replay = new ReplaySystem(config.seed, config.replay, config.mountain ?? undefined);
     this.npcs = new NpcSystem(
       config.seed,
-      config.quality === 'low' || config.quality === 'potato' ? 3 : 5,
+      config.mountain?.npcCount ?? (config.quality === 'low' || config.quality === 'potato' ? 3 : 5),
+      this.mountain,
     );
     this.hud = new HUD(root, config, () => this.setPaused(!this.paused));
+    if (this.mountain) this.mountainHUD = new MountainHUD(root, this.mountain);
     this.input = new InputManager(
       canvas,
       (connected) => this.hud.setControllerConnected(connected),
@@ -78,7 +98,8 @@ export class Game {
       this.hud.touchActionElements,
       config.mobileTouchScheme,
     );
-    this.crashOverlay = new CrashOverlay(root, () => this.restart());
+    this.crashOverlay = new CrashOverlay(root, () => this.restartAtTop(),
+      this.mountain ? () => this.retrySection() : undefined);
     root.classList.toggle('performance-ui-disabled', config.performance.disabled.has('ui'));
     if (config.developmentMode) {
       new PoseGallery(
@@ -94,7 +115,7 @@ export class Game {
       new CrashLab(
         root,
         (settings) => this.triggerLabCrash(settings),
-        () => this.restart(),
+        () => this.retrySection(),
         config.crashLabMode,
       );
       new NpcLab(
@@ -110,6 +131,7 @@ export class Game {
     globalThis.__POWDERLINE_TRIGGER_JUMP__ = config.developmentMode
       ? () => this.physics.beginJump()
       : undefined;
+    globalThis.__POWDERLINE_REPLAY__ = config.developmentMode ? () => this.replay.serialize() : undefined;
     this.loop = new FixedStepLoop(
       config.fixedStepSeconds,
       config.maxFrameSeconds,
@@ -123,27 +145,32 @@ export class Game {
           (this.input.consumeRestart() || (confirm && this.physics.state.crashed)) &&
           this.physics.state.crashed
         ) {
-          this.restart();
+          this.retrySection();
         }
         if (!this.paused && !this.poseInspectionActive) {
           const replayInput = this.physics.state.crashed || this.config.performance.disabled.has('replay')
             ? this.input.state
             : this.replay.sample(this.input.state);
           this.simulationInput = replayInput;
+          const state = this.physics.state;
+          if (this.mountain) {
+            this.before.x = state.position.x;
+            this.before.y = state.position.y;
+          }
           if (!this.npcInspectionActive) this.physics.step(delta, replayInput);
-          if (!this.config.performance.disabled.has('npcSim')) {
+          if (this.npcSimulationEnabled) {
             this.npcs.step(delta, this.physics.state);
           }
           const collisionStarted = performance.now();
           if (
-            !this.config.performance.disabled.has('collisions') &&
+            this.collisionsEnabled &&
             !this.physics.state.crashed &&
             !this.physics.state.airborne &&
             this.physics.canCollide()
           ) {
-            const hit = this.collision.query(this.physics.state);
+            const wall = this.collision.queryWall(state);
+            const hit = wall ?? this.collision.query(state);
             if (hit && hit.feature.type !== 'none') {
-              const state = this.physics.state;
               if (hit.feature.type === 'ramp') {
                 this.physics.beginJump();
               } else {
@@ -175,7 +202,7 @@ export class Game {
             }
           }
           if (
-            !this.config.performance.disabled.has('collisions') &&
+            this.collisionsEnabled &&
             !this.npcInspectionActive &&
             !this.physics.state.crashed &&
             this.physics.canCollide()
@@ -209,16 +236,25 @@ export class Game {
             }
           }
           this.collisionTiming.push(performance.now() - collisionStarted);
+          if (this.mountain && !state.crashed && !this.npcInspectionActive) {
+            this.keepInsidePiste();
+            const outcome = this.mountain.advance(this.before, state.position, state.airborne, delta);
+            if (outcome === 'caught') this.physics.crash();
+            if (outcome === 'transition') this.saveCheckpoint();
+          }
           if (
             this.physics.state.crashed &&
             !this.crashPromptShown &&
             this.physics.state.crash.elapsed >= this.physics.state.crash.duration
           ) {
             this.crashPromptShown = true;
+            const replayAvailable = !this.labCrash && !this.config.performance.disabled.has('replay');
             this.crashOverlay.show(
               this.physics.state.position.y,
-              this.replay.serialize(),
+              replayAvailable ? this.replay.serialize() : '',
               this.physics.state.crash.family,
+              this.mountain?.avalanche === 'caught',
+              replayAvailable ? undefined : 'Replay unavailable for this run.',
             );
           }
           if (!this.config.performance.disabled.has('trails')) {
@@ -234,17 +270,57 @@ export class Game {
     );
   }
 
-  private restart(): void {
+  private saveCheckpoint(): void {
+    this.checkpoint = { ski: this.physics.checkpoint(), npcs: this.npcs.checkpoint(), replay: this.replay.checkpoint() };
+  }
+
+  private keepInsidePiste(): void {
+    const { position } = this.physics.state;
+    const section = this.mountain?.sectionAt(position.y) ?? this.mountain?.section;
+    if (!section) return;
+    const y = Math.min(position.y, section.end);
+    const center = pathCenter(section, y);
+    const width = pathHalfWidth(section, y) - SKIER_COLLISION_RADIUS;
+    const corrected = Math.max(center - width, Math.min(center + width, position.x));
+    if (position.x !== corrected) {
+      if ((position.x - corrected) * this.physics.state.velocityX > 0) this.physics.state.velocityX = 0;
+      position.x = corrected;
+    }
+  }
+
+  private restartAtTop(): void {
+    if (!this.mountain) {
+      this.retrySection();
+      return;
+    }
+    const url = new URL(location.href);
+    for (const key of ['replay', 'course', 'section', 'scenario']) url.searchParams.delete(key);
+    url.hash = '';
+    const candidate = newRunSeed();
+    url.searchParams.set('seed', String(candidate === this.config.seed ? (candidate + 1) >>> 0 : candidate));
+    location.assign(url);
+  }
+
+  private retrySection(): void {
     this.setPaused(false);
-    this.physics.reset();
-    this.replay.reset();
+    this.input.resetTransientState();
+    if (this.mountain && this.checkpoint) {
+      this.mountain.retry();
+      this.physics.restore(this.checkpoint.ski);
+      this.replay.restore(this.checkpoint.replay);
+      this.npcs.restore(this.checkpoint.npcs);
+    } else {
+      this.physics.reset();
+      this.replay.reset();
+      this.npcs.reset(this.physics.state);
+    }
     this.origin.reset(this.physics.state.position);
     this.renderer.resetCamera(this.physics.state);
     this.renderer.resetTrail(this.physics.state);
     this.crashOverlay.hide();
     this.crashPromptShown = false;
+    this.labCrash = false;
     this.renderer.clearImpactDebug();
-    this.npcs.reset(this.physics.state);
   }
 
   private setPaused(paused: boolean): void {
@@ -276,7 +352,7 @@ export class Game {
     severityBias: number;
     variation: number;
   }): string {
-    this.restart();
+    this.retrySection();
     const radians = settings.angle * Math.PI / 180;
     const state = this.physics.state;
     state.velocityX = Math.sin(radians) * settings.speed;
@@ -306,14 +382,24 @@ export class Game {
     context.normalY /= normalLength;
     const reaction = selectCrashReaction(context);
     this.renderer.setImpactDebug(context, reaction);
-    if (reaction.outcome === 'crash') this.physics.beginCrash(context, reaction);
+    if (reaction.outcome === 'crash') {
+      this.labCrash = true;
+      this.physics.beginCrash(context, reaction);
+    }
     else this.physics.applyMinorImpact(context, reaction);
     return `${reaction.outcome} · ${reaction.family} · strength ${reaction.strength.toFixed(2)}`;
   }
 
   async start(): Promise<void> {
     await this.renderer.initialize();
+    if (this.mountain) {
+      Object.assign(this.physics.state.position, this.mountain.spawn);
+      this.renderer.resetCamera(this.physics.state);
+      this.renderer.resetTrail(this.physics.state);
+      this.origin.reset(this.physics.state.position);
+    }
     this.npcs.reset(this.physics.state);
+    if (this.mountain) this.saveCheckpoint();
     document.body.classList.add('ready');
     this.loop.start();
     new LifecycleManager({
@@ -336,6 +422,7 @@ export class Game {
     this.origin.update(state.position);
     const snapshot = this.metrics.push(frameMs);
     const touchDiagnostics = this.input.touchDiagnostics;
+    this.mountainHUD?.update(state);
     this.hud.updateTouchDiagnostics(touchDiagnostics);
     if (!this.paused || this.renderWhilePaused) {
       this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
@@ -393,6 +480,25 @@ export class Game {
       fixedStepsLastFrame: this.loop.latestStepCount,
       fixedStepsPeak: this.loop.peakStepCount,
       });
+      if (this.mountain) {
+        const { section, previous, lastLane, gateIndex, gateStreak, gateOutcome, cleanGates, avalanche, front } = this.mountain;
+        const gate = section.gates[gateIndex];
+        Object.assign(this.publicMetrics, {
+          section: section.trail, sectionId: section.id, sectionIndex: section.index,
+          sectionStart: section.start, sectionEnd: section.end, sectionCenter: section.center,
+          sectionDistance: state.position.y - section.start, sectionVariant: section.variant,
+          forkLane: laneAt(section, state.position.x), lastLane: lastLane ?? 'none',
+          leftTrail: section.offers[0]!.trail, straightTrail: section.offers[1]!.trail, rightTrail: section.offers[2]!.trail,
+          gateIndex, gateStreak, gateOutcome, cleanGates, nextGateX: gate?.x ?? 0, nextGateY: gate?.y ?? 0,
+          avalanche, avalancheFront: front, shelterEdge: section.slide?.shelterEdge ?? 0,
+          shelterStart: section.slide?.shelterStart ?? 0, shelterEnd: section.slide?.shelterEnd ?? 0,
+          pisteCenter: pathCenter(section, state.position.y), pisteHalfWidth: pathHalfWidth(section, state.position.y),
+          pisteAheadX: pathCenter(section, state.position.y + 20),
+          retainedSections: previous ? 2 : 1, replayRuns: this.replay.recordingRuns,
+          velocityX: state.velocityX, velocityY: state.velocityY,
+          jumpSequence: state.jump.sequence,
+        });
+      }
       globalThis.__POWDERLINE_METRICS__ = this.publicMetrics;
     }
     this.hud.update(
@@ -410,4 +516,5 @@ export class Game {
 declare global {
   var __POWDERLINE_METRICS__: Record<string, number | string> | undefined;
   var __POWDERLINE_TRIGGER_JUMP__: (() => void) | undefined;
+  var __POWDERLINE_REPLAY__: (() => string) | undefined;
 }

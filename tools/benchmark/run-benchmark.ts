@@ -19,6 +19,11 @@ const maxCanvasPixels = argument('maxCanvasPixels', '');
 const scenario = argument('scenario', disable ? `without-${disable.replaceAll(',', '-')}` : 'normal');
 const browserName = argument('browser', 'chrome');
 const backend = argument('backend', 'default');
+const section = argument('section', '');
+const start = argument('start', '');
+const drive = argument('drive', 'carves');
+const avalanche = argument('avalanche', '');
+const lead = Number(argument('lead', 'Infinity'));
 const reportDirectory = path.resolve('tools/reports');
 await mkdir(reportDirectory, { recursive: true });
 
@@ -87,9 +92,10 @@ async function launchBrowser(): Promise<Browser> {
   return chromium.launch({ headless: true, executablePath, args });
 }
 
+let browser: Browser | undefined;
 try {
   await waitForServer();
-  const browser = await launchBrowser();
+  browser = await launchBrowser();
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: dpr,
@@ -101,12 +107,21 @@ try {
   });
   page.on('pageerror', (error) => errors.push(error.message));
   const query = new URLSearchParams({ seed: '424242', quality });
+  if (section) query.set('section', section);
+  if (start) query.set('scenario', start);
   if (disable) query.set('disable', disable);
   if (renderScale) query.set('renderScale', renderScale);
   if (maxCanvasPixels) query.set('maxCanvasPixels', maxCanvasPixels);
   await page.goto(`http://127.0.0.1:4173/?${query}`, { waitUntil: 'networkidle' });
-  await page.waitForFunction(() => document.body.classList.contains('ready'), undefined, { timeout: 20_000 });
+  await page.waitForFunction(() => !!Reflect.get(globalThis, '__POWDERLINE_METRICS__'), undefined, { timeout: 20_000 });
+  if (drive === 'tuck') await page.keyboard.down('KeyS');
   await page.waitForTimeout(warmupSeconds * 1000);
+  if (avalanche) {
+    await page.waitForFunction(({ phase, maxLead }) => {
+      const metrics = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+      return metrics?.avalanche === phase && metrics.worldY - metrics.avalancheFront <= maxLead;
+    }, { phase: avalanche, maxLead: lead }, { timeout: 25_000 });
+  }
   await page.evaluate(`(() => {
     const samples = [];
     let previous = performance.now();
@@ -118,7 +133,8 @@ try {
     };
     requestAnimationFrame(sample);
   })()`);
-  await scriptedInput(page, durationSeconds * 1000);
+  if (drive === 'coast' || drive === 'tuck') await page.waitForTimeout(durationSeconds * 1000);
+  else await scriptedInput(page, durationSeconds * 1000);
   const captureName = `${scenario}-${width}x${height}-dpr${dpr}`.replaceAll('.', '_');
   // Read the measured interval before capture. High-resolution screenshots can
   // briefly stall presentation and must not be counted as gameplay frame time.
@@ -141,6 +157,7 @@ try {
       },
     };
   });
+  if (drive === 'tuck') await page.keyboard.up('KeyS');
   await page.screenshot({ path: path.join(reportDirectory, `${captureName}.png`) });
   const canvasPixels = pageData.canvas.pixelWidth * pageData.canvas.pixelHeight;
   const result = {
@@ -149,6 +166,7 @@ try {
     quality,
     browser: browserName,
     backend,
+    route: { section, start, drive, avalanche, lead: Number.isFinite(lead) ? lead : null },
     durationSeconds,
     viewport: { width, height, dpr },
     canvas: { ...pageData.canvas, pixels: canvasPixels },
@@ -161,10 +179,10 @@ try {
   const fileName = `${captureName}.json`;
   await writeFile(path.join(reportDirectory, fileName), JSON.stringify(result, null, 2));
   await writeFile(path.join(reportDirectory, 'benchmark.json'), JSON.stringify(result, null, 2));
-  await browser.close();
   if (!result.canvasVisible || errors.length > 0) process.exitCode = 1;
   console.log(JSON.stringify(result, null, 2));
 } finally {
+  await browser?.close();
   server.kill();
 }
 

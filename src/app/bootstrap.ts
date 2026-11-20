@@ -45,6 +45,21 @@ export async function bootstrap(): Promise<void> {
   if (!root) throw new Error('Application root is missing.');
   root.innerHTML = '<main class="loading" role="status">Preparing fresh tracks…</main>';
   document.body.classList.add('ready');
+  if (GAME_CONFIG.replayError) {
+    const card = document.createElement('main');
+    card.className = 'compatibility';
+    const message = document.createElement('div');
+    message.className = 'compat-card';
+    const detail = document.createElement('p');
+    detail.textContent = GAME_CONFIG.replayError;
+    const home = document.createElement('a');
+    home.href = location.pathname;
+    home.textContent = 'Start a new descent';
+    message.append(detail, home);
+    card.append(message);
+    root.replaceChildren(card);
+    return;
+  }
   await initializeSentry();
   if (!navigator.gpu) {
     reportStartupFailure(new Error('WebGPU is unavailable.'), 'webgpu-availability');

@@ -33,6 +33,11 @@ export interface JumpState {
   sequence: number;
 }
 
+export interface SkiCheckpoint {
+  state: SkiState;
+  collisionCooldown: number;
+}
+
 export class SkiPhysics {
   readonly state: SkiState = {
     position: { x: 0, y: 0 },
@@ -257,6 +262,24 @@ export class SkiPhysics {
     this.crashAnchorX = 0;
     this.crashAnchorY = 0;
     this.collisionCooldown = 0;
+  }
+
+  checkpoint(): SkiCheckpoint {
+    const state = this.state;
+    return {
+      state: { ...state, position: { ...state.position }, jump: { ...state.jump }, crash: { ...state.crash } },
+      collisionCooldown: this.collisionCooldown,
+    };
+  }
+
+  restore(checkpoint: SkiCheckpoint): void {
+    this.reset();
+    const { position, jump, crash, ...state } = checkpoint.state;
+    Object.assign(this.state, state);
+    Object.assign(this.state.position, position);
+    Object.assign(this.state.jump, jump);
+    Object.assign(this.state.crash, crash);
+    this.collisionCooldown = checkpoint.collisionCooldown;
   }
 
   private stepCrash(delta: number): void {

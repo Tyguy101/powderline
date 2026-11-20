@@ -22,6 +22,7 @@ function runtimeContext(): Record<string, unknown> {
 }
 
 export async function initializeSentry(): Promise<void> {
+  if (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname)) return;
   const dsn = import.meta.env.VITE_SENTRY_DSN;
   if (!dsn) return;
 

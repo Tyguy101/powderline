@@ -32,7 +32,7 @@ const profiles: Profile[] = [
   { name: 'high-dpi-laptop', viewport: '2560x1600', dpr: 1.5, medianBudgetMs: 18.5, p95BudgetMs: 25 },
   { name: 'mobile-portrait', viewport: '390x844', dpr: 2, quality: 'low', medianBudgetMs: 18.5, p95BudgetMs: 25 },
   { name: 'mobile-landscape', viewport: '844x390', dpr: 2, quality: 'low', medianBudgetMs: 18.5, p95BudgetMs: 25 },
-  { name: 'empty-snow', viewport: '1920x1080', dpr: 1.5, disable: 'obstacles,npcRender,npcSim,trails,collisions', medianBudgetMs: 18.5, p95BudgetMs: 25 },
+  { name: 'empty-snow', viewport: '1920x1080', dpr: 1.5, disable: 'obstacles,npcRender,npcSim,trails,collisions,mountain', medianBudgetMs: 18.5, p95BudgetMs: 25 },
   { name: 'five-npcs', viewport: '1920x1080', dpr: 1.5, quality: 'medium', disable: 'collisions', medianBudgetMs: 18.5, p95BudgetMs: 25 },
   { name: 'three-npcs', viewport: '1920x1080', dpr: 1.5, quality: 'low', disable: 'collisions', medianBudgetMs: 18.5, p95BudgetMs: 25 },
   { name: 'heavy-trails', viewport: '1920x1080', dpr: 1.5, disable: 'collisions', medianBudgetMs: 18.5, p95BudgetMs: 25 },

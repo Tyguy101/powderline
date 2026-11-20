@@ -1,6 +1,7 @@
 import { hashCoordinates, hashUnit } from '../core/SeededHash';
 import type { SkiState } from './SkiPhysics';
-import { FeatureGeneratorCPU, type FeatureDescriptor } from '../world/FeatureGeneratorCPU';
+import { FeatureGeneratorCPU, type FeatureDescriptor, type SectionSource } from '../world/FeatureGeneratorCPU';
+import { pathCenter, pathHalfWidth } from '../world/EndlessMountain';
 
 export const MAX_NPCS = 5;
 export const NPC_COLLISION_RADIUS = 0.66;
@@ -109,8 +110,9 @@ export class NpcSystem {
   constructor(
     private readonly seed: number,
     private readonly populationLimit = MAX_NPCS,
+    private readonly course?: SectionSource,
   ) {
-    this.features = new FeatureGeneratorCPU(seed);
+    this.features = new FeatureGeneratorCPU(seed, course);
   }
 
   reset(player: Readonly<SkiState>): void {
@@ -119,6 +121,16 @@ export class NpcSystem {
       npc.generation = 0;
       this.spawn(npc, player, true);
     }
+  }
+
+  checkpoint(): { states: NpcState[]; recycled: number } {
+    return { states: this.states.map((npc) => ({ ...npc })), recycled: this.recycled };
+  }
+
+  restore(checkpoint: ReturnType<NpcSystem['checkpoint']>): void {
+    for (const npc of this.states) Object.assign(npc, checkpoint.states[npc.slot]);
+    this.recycled = checkpoint.recycled;
+    this.finishMetrics(performance.now());
   }
 
   setLab(active: boolean, type: NpcType, pose: number, fall: NpcFall): void {
@@ -197,6 +209,12 @@ export class NpcSystem {
 
     const lookX = npc.x + npc.velocityX * 0.34;
     const lookY = npc.y + npc.velocityY * 0.42;
+    const section = this.course?.sectionAt(lookY);
+    if (section) {
+      const offset = lookX - pathCenter(section, lookY);
+      const width = pathHalfWidth(section, lookY);
+      if (Math.abs(offset) > width - 5) intent = -Math.sign(offset);
+    }
     const obstacle = this.features.findCollision(lookX, lookY, 1.2, this.obstacle);
     if (obstacle?.type === 'ramp' && npc.type === 'snowboarder') {
       npc.airborne = Math.max(npc.airborne, 1);
@@ -305,6 +323,12 @@ export class NpcSystem {
     const side = hashUnit(this.seed, npc.slot, key, 23) * 2 - 1;
     npc.x = player.position.x + side * (9 + hashUnit(this.seed, npc.slot, key, 24) * 35);
     npc.y = player.position.y + 34 + npc.slot * 11 + hashUnit(this.seed, npc.slot, key, 25) * 34;
+    const section = this.course?.sectionAt(npc.y);
+    if (section) {
+      const center = pathCenter(section, npc.y);
+      const width = pathHalfWidth(section, npc.y);
+      npc.x = center + side * width * (0.54 + hashUnit(this.seed, npc.slot, key, 24) * 0.31);
+    }
     npc.velocityX = 0;
     npc.velocityY = npc.type === 'speed-skier' ? 27 : npc.type === 'beginner-skier' ? 9 : 19;
     npc.facing = 0;

@@ -24,9 +24,10 @@ import {
   vec3,
 } from 'three/tsl';
 import {
-  describeFeature,
+  FeatureGeneratorCPU,
   FEATURE_CELL_SIZE,
   type FeatureDescriptor,
+  type SectionSource,
 } from '../world/FeatureGeneratorCPU';
 
 const FEATURE_CAPACITY = 192;
@@ -73,8 +74,13 @@ export class WorldFeatureRenderer {
   private previousMinY = Number.NaN;
   private previousMaxY = Number.NaN;
   private visibleCount = 0;
+  private readonly generation: FeatureGeneratorCPU;
+  private previousRevision = -1;
+  private anchorX = 0;
+  private anchorY = 0;
 
-  constructor(private readonly seed: number) {
+  constructor(seed: number, private readonly course?: SectionSource) {
+    this.generation = new FeatureGeneratorCPU(seed, course);
     this.typeAttribute = new StorageInstancedBufferAttribute(this.typeData, 4);
     this.typeAttribute.setUsage(DynamicDrawUsage);
     const feature = varying(
@@ -133,42 +139,57 @@ export class WorldFeatureRenderer {
   }
 
   update(cameraX: number, cameraY: number, viewWidth: number, viewHeight: number): void {
-    this.mesh.position.x = -cameraX;
-    this.mesh.position.y = cameraY;
     const margin = FEATURE_CELL_SIZE;
     const minX = Math.floor((cameraX - viewWidth * 0.5 - margin) / FEATURE_CELL_SIZE);
     const maxX = Math.floor((cameraX + viewWidth * 0.5 + margin) / FEATURE_CELL_SIZE);
     const minY = Math.floor((cameraY - viewHeight * 0.5 - margin) / FEATURE_CELL_SIZE);
     const maxY = Math.floor((cameraY + viewHeight * 0.5 + margin) / FEATURE_CELL_SIZE);
-    if (
-      minX === this.previousMinX && maxX === this.previousMaxX &&
-      minY === this.previousMinY && maxY === this.previousMaxY
-    ) return;
+    const revision = this.course?.revision ?? 0;
+    if (minX !== this.previousMinX || maxX !== this.previousMaxX ||
+      minY !== this.previousMinY || maxY !== this.previousMaxY || revision !== this.previousRevision) {
+      this.rebuild(minX, maxX, minY, maxY, revision);
+    }
+    this.mesh.position.x = this.anchorX - cameraX;
+    this.mesh.position.y = cameraY - this.anchorY;
+  }
+
+  private rebuild(minX: number, maxX: number, minY: number, maxY: number, revision: number): void {
+    this.previousRevision = revision;
     this.previousMinX = minX;
     this.previousMaxX = maxX;
     this.previousMinY = minY;
     this.previousMaxY = maxY;
+    this.anchorX = minX * FEATURE_CELL_SIZE;
+    this.anchorY = minY * FEATURE_CELL_SIZE;
     let instance = 0;
+    const sections = new Set([minY, (minY + maxY) / 2, maxY]
+      .map((cellY) => this.course?.sectionAt((cellY + 0.5) * FEATURE_CELL_SIZE)));
+    for (const section of sections) {
+      for (const feature of section?.features ?? []) {
+        if (feature.x < this.anchorX || feature.x > (maxX + 1) * FEATURE_CELL_SIZE ||
+            feature.y < this.anchorY || feature.y > (maxY + 1) * FEATURE_CELL_SIZE) continue;
+        this.writeFeature(instance++, feature);
+      }
+    }
     for (let cellY = minY; cellY <= maxY && instance < FEATURE_CAPACITY; cellY += 1) {
       for (let cellX = minX; cellX <= maxX && instance < FEATURE_CAPACITY; cellX += 1) {
-        describeFeature(this.seed, cellX, cellY, this.candidate);
+        this.generation.describeCell(cellX, cellY, this.candidate);
         if (this.candidate.type === 'none') continue;
-        this.position.set(this.candidate.x, -this.candidate.y, 0);
-        this.scale.set(this.candidate.scale, this.candidate.scale, 1);
-        this.matrix.compose(this.position, this.rotation, this.scale);
-        this.mesh.setMatrixAt(instance, this.matrix);
-        const offset = instance * 4;
-        this.typeData[offset] = this.candidate.type === 'tree' ? 1 : this.candidate.type === 'rock' ? 2 : 3;
-        this.typeData[offset + 1] = this.candidate.id;
-        this.typeData[offset + 2] = this.candidate.scale;
-        this.typeData[offset + 3] = 1;
-        instance += 1;
+        this.writeFeature(instance++, this.candidate);
       }
     }
     this.visibleCount = instance;
     this.mesh.count = instance;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.typeAttribute.needsUpdate = true;
+  }
+
+  private writeFeature(instance: number, feature: FeatureDescriptor): void {
+    this.position.set(feature.x - this.anchorX, this.anchorY - feature.y, 0);
+    this.scale.set(feature.scale, feature.scale, 1);
+    this.matrix.compose(this.position, this.rotation, this.scale);
+    this.mesh.setMatrixAt(instance, this.matrix);
+    this.typeData[instance * 4] = feature.type === 'tree' ? 1 : feature.type === 'rock' ? 2 : 3;
   }
 
   get count(): number {

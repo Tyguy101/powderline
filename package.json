@@ -18,6 +18,7 @@
     "benchmark:matrix": "tsx tools/benchmark/run-matrix.ts",
     "benchmark:matrix:full": "tsx tools/benchmark/run-matrix.ts --full",
     "qa:mobile": "tsx tools/qa/run-mobile-lifecycle.ts",
+    "qa:endless": "tsx tools/qa/endless-browser.ts",
     "capture": "tsx tools/capture/capture.ts",
     "capture:crashes": "tsx tools/capture/crash-sequence.ts",
     "report": "tsx tools/benchmark/create-report.ts"
