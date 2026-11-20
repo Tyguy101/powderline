@@ -29,15 +29,21 @@ shelters come from the same descriptors used by simulation and rendering.
 
 At a live section crossing, the game stores one skier, NPC, and replay cursor
 checkpoint. Retrying restores that checkpoint and the committed gate total,
-then replays new input from that point. Version 6 replay links include the seed,
+then replays new input from that point. Version 7 replay links include the seed,
 initial section/scenario, relevant simulation options, and 60 Hz inputs.
 World transitions are derived from those inputs. New links store recordings
 in the URL fragment so long runs load without a lengthy request URL.
-Version 5 links select the
-classic continuous field. The mountain reports when its 16,000 input-run
+Version 5 links select the classic continuous field. Version 6 mountain links
+belong to the original Endless Mountain rules on `codex/endless-mountain`.
+The mountain reports when its 16,000 input-run
 recording buffer fills, while the descent itself continues.
 
 The course uses bounded camera-local vertex buffers and a single small
 transparent plane for the avalanche. Its wake is culled outside the camera
 band. CPU feature instances and the ground remain on the existing adaptive
 canvas and use local coordinates for rendering.
+
+Fork text is projected from the same camera and world points as its gantries.
+The slalom gate highlight uses the live fixed-step gate cursor. The park draws
+and tests the same lip and irregular gap outline. The avalanche stage stores
+one active sweep and uses a shared edge curve for the cloud and engulfment.

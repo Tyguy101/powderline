@@ -66,14 +66,16 @@ link to its starting layout, or specify one with `?seed=1729`.
 
 For seed 1729, take **left → left → right → left → right** to ski Pine Glades,
 Gate Run, Big Air Park, Needle Chute, Avalanche Alley, and then return to Gate
-Run. The fork previews the choices before you reach the colored flags. Steer
-through a lane to choose it. After a crash, **Retry Section** restores the latest
+Run. Read the overhead sign and the three destination banners, then ski
+through one of the signed entrances to choose it. After a crash, **Retry Section** restores the latest
 section entrance and **Restart at the Top** starts a fresh Pine Glades descent.
 
 Targeted local checks support `?seed=1729&section=chute&scenario=encounter` and
 `?seed=1729&section=pine&scenario=fork`. Section IDs are `pine`, `gate`, `air`,
 `chute`, and `avalanche`. The start scenarios are `summit`, `encounter`, and
 `fork`. Use `?quality=potato` for the reduced preset and `?debug=1` for F3 metrics.
+Append a saved recording to `/#replay=`. This trail build writes v7 recordings.
+Earlier v6 mountain recordings play on `codex/endless-mountain`. Classic v5 is supported in both branches.
 
 ## Production
 

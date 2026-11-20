@@ -347,37 +347,61 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
     path: path.join(reportDirectory, `${profile.name}.png`),
   });
   await page.goto('http://127.0.0.1:4175/?seed=1729&quality=low&scenario=fork');
-  const fork = page.getByRole('region', { name: 'Upcoming trail choices' });
-  await fork.waitFor({ state: 'visible' });
-  assert(await fork.locator('.mountain-choices > div').count() === 3, 'Trail preview is missing a choice.');
+  const fork = page.getByRole('region', { name: 'Trail signs' });
+  const signs = fork.locator('.trail-destination:visible');
+  await page.waitForFunction(() => Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.sectionEnd) -
+    Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.worldY) < 132);
   const forkLayouts = [];
   for (const [label, viewport] of [['initial', profile.viewport], ['rotated', profile.rotated]] as const) {
     await page.setViewportSize(viewport);
-    const preview = await fork.boundingBox();
-    const brake = await page.locator('.touch-action--brake').boundingBox();
-    const tuck = await page.locator('.touch-action--tuck').boundingBox();
+    await signs.first().waitFor({ state: 'visible' });
+    const names = await signs.allTextContents();
+    assert(names.some((name) => name.includes('↙Gate Run')) &&
+      names.some((name) => name.includes('↓Pine Glades')) &&
+      names.some((name) => name.includes('↘Pine Glades')),
+    `${profile.name}: destination names and arrows are missing in ${label} orientation.`);
     const trail = await page.getByRole('region', { name: 'Current trail' }).boundingBox();
     const pause = await page.locator('.mobile-pause').boundingBox();
     assert(trail && pause && trail.x >= pause.x + pause.width,
       `${profile.name}: current trail sits under pause in ${label} orientation.`);
-    assert(preview && preview.x >= 0 && preview.y >= 0 &&
-      preview.x + preview.width <= viewport.width + 1 && preview.y + preview.height <= viewport.height + 1,
-    `${profile.name}: trail preview is clipped in ${label} orientation.`);
-    for (const control of [brake, tuck]) {
-      assert(control && (
-        preview.x + preview.width <= control.x || control.x + control.width <= preview.x ||
-        preview.y + preview.height <= control.y || control.y + control.height <= preview.y
-      ), `${profile.name}: trail preview covers a speed control in ${label} orientation.`);
-    }
-    forkLayouts.push({ label, viewport, preview });
+    forkLayouts.push({ label, viewport, names });
     await page.screenshot({ path: path.join(reportDirectory, `${profile.name}-fork-${label}.png`) });
   }
   if (profile.name === 'narrow-landscape') {
     await page.setViewportSize(profile.viewport);
-    await page.locator('.mountain-fork--close').waitFor({ state: 'visible' });
-    assert(!await fork.locator('.mountain-choices span').first().isVisible(),
-      'Compact trail preview obscures the approach.');
-    await page.screenshot({ path: path.join(reportDirectory, 'narrow-landscape-fork-close.png') });
+    await page.goto('http://127.0.0.1:4175/?seed=1729&quality=low&scenario=fork');
+    const session = await context.newCDPSession(page);
+    const tuck = await page.locator('.touch-action--tuck').boundingBox();
+    assert(tuck, 'Missing touch tuck control.');
+    const action = { id: 1, x: tuck.x + tuck.width / 2, y: tuck.y + tuck.height / 2 };
+    const steering = { id: 2, x: 81, y: profile.viewport.height * 0.62 };
+    const emit = (type: 'touchStart' | 'touchMove' | 'touchEnd', points: typeof action[]) =>
+      session.send('Input.dispatchTouchEvent', { type, touchPoints: points });
+    await emit('touchStart', [action]);
+    await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputTuck === 'true');
+    await page.waitForFunction(() => {
+      const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+      return Number(m?.sectionEnd) - Number(m?.worldY) < 132;
+    });
+    await emit('touchStart', [action, steering]);
+    await emit('touchMove', [action, { ...steering, x: steering.x + 84 }]);
+    await page.waitForFunction(() => {
+      const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+      return Number(m?.worldX) > 10.8 || m?.crashed === 'true';
+    }, undefined, { timeout: 10_000 });
+    const approach = await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__'));
+    assert(approach?.crashed === 'false', `Tucked traverse crashed: ${JSON.stringify(approach)}`);
+    await emit('touchMove', [action, steering]);
+    await page.waitForFunction(() => {
+      const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+      return Number(m?.sectionEnd) - Number(m?.worldY) < 34;
+    });
+    assert(Number(await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.velocityY)) > 30,
+      'Narrow landscape fork approach was slower than tuck speed.');
+    await page.screenshot({ path: path.join(reportDirectory, 'narrow-landscape-fork-tuck.png') });
+    await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.lastLane === 1);
+    await emit('touchEnd', []);
+    await session.detach();
   }
   assert(errors.length === 0, `${profile.name}: browser errors: ${errors.join(' | ')}`);
   await context.close();

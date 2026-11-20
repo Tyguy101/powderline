@@ -1,6 +1,6 @@
 import { chromium, type Browser, type Page } from '@playwright/test';
 import { spawn } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 function argument(name: string, fallback: string): string {
@@ -25,10 +25,15 @@ const start = argument('start', '');
 const drive = argument('drive', 'carves');
 const avalanche = argument('avalanche', '');
 const lead = Number(argument('lead', 'Infinity'));
+const wave = Number(argument('wave', '-1'));
+const forkRange = Number(argument('fork-range', '0'));
+const replayFile = argument('replay-file', '');
+const externalPreview = argument('url', '');
+const preview = externalPreview || 'http://127.0.0.1:4173';
 const reportDirectory = path.resolve('tools/reports');
 await mkdir(reportDirectory, { recursive: true });
 
-const server = spawn(
+const server = externalPreview ? null : spawn(
   process.execPath,
   [path.resolve('node_modules/vite/bin/vite.js'), 'preview', '--host', '127.0.0.1'],
   { stdio: ['ignore', 'pipe', 'pipe'] },
@@ -37,7 +42,7 @@ const server = spawn(
 async function waitForServer(): Promise<void> {
   for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
-      const response = await fetch('http://127.0.0.1:4173');
+      const response = await fetch(preview);
       if (response.ok) return;
     } catch {
       // Preview is still starting.
@@ -94,6 +99,8 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 let browser: Browser | undefined;
+let guideActive = false;
+let guideTask: Promise<void> | undefined;
 try {
   await waitForServer();
   browser = await launchBrowser();
@@ -113,21 +120,50 @@ try {
   if (disable) query.set('disable', disable);
   if (renderScale) query.set('renderScale', renderScale);
   if (maxCanvasPixels) query.set('maxCanvasPixels', maxCanvasPixels);
-  await page.goto(`http://127.0.0.1:4173/?${query}`, { waitUntil: 'networkidle' });
+  const replay = replayFile ? `#replay=${(await readFile(replayFile, 'utf8')).trim()}` : '';
+  await page.goto(`${preview}/?${query}${replay}`, { waitUntil: 'networkidle' });
   await page.waitForFunction(() => !!Reflect.get(globalThis, '__POWDERLINE_METRICS__'), undefined, { timeout: 20_000 });
   if (drive === 'tuck') await page.keyboard.down('KeyS');
+  if (drive === 'chute') {
+    const centerX = width / 2;
+    const centerY = height / 2;
+    const range = Math.max(92, Math.min(180, width * 0.19));
+    await page.mouse.move(centerX, centerY);
+    await page.mouse.down();
+    guideActive = true;
+    guideTask = (async () => {
+      while (guideActive) {
+        const m = await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__'));
+        const target = Number(m?.pisteGuideX ?? m?.pisteAheadX);
+        const steer = Math.max(-1, Math.min(1, (target - Number(m?.worldX) - Number(m?.velocityX) * 0.63) * 0.13));
+        const corner = Number(m?.pisteHalfWidth) < 11.3 || Number(m?.pisteAheadWidth) < 11.5 ||
+          Math.abs(target - Number(m?.pisteCenter)) > 4.8;
+        await page.mouse.move(centerX + steer * range, centerY + (corner ? -76 : 0));
+        await page.waitForTimeout(65);
+      }
+    })().catch((error: Error) => { errors.push(error.message); });
+  }
   await page.waitForTimeout(warmupSeconds * 1000);
+  if (forkRange > 0) await page.waitForFunction((distance) => {
+    const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+    return Number(m?.sectionEnd) - Number(m?.worldY) <= distance;
+  }, forkRange);
   if (avalanche) {
     try {
-      await page.waitForFunction(({ phase, maxLead }) => {
+      await page.waitForFunction(({ phase, maxLead, wave }) => {
         const metrics = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
-        return metrics?.avalanche === phase && metrics.worldY - metrics.avalancheFront <= maxLead;
-      }, { phase: avalanche, maxLead: lead }, { timeout: 25_000 });
+        return metrics?.crashed === 'true' ||
+          (metrics?.avalanche === phase && Number(metrics.worldY) - Number(metrics.avalancheFront) <= maxLead &&
+          (wave < 0 || metrics.wave === wave));
+      }, { phase: avalanche, maxLead: lead, wave }, { timeout: 45_000 });
+      const current = await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__'));
+      if (current?.crashed === 'true') throw new Error('Skier crashed before the benchmark window.');
     } catch (cause) {
       const current = await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__'));
       throw new Error(`Avalanche benchmark did not reach the requested window: ${JSON.stringify(current)}`, { cause });
     }
   }
+  const metricsStart = await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__'));
   await page.evaluate(`(() => {
     const samples = [];
     let previous = performance.now();
@@ -139,7 +175,7 @@ try {
     };
     requestAnimationFrame(sample);
   })()`);
-  if (drive === 'coast' || drive === 'tuck') await page.waitForTimeout(durationSeconds * 1000);
+  if (drive === 'coast' || drive === 'tuck' || guideTask) await page.waitForTimeout(durationSeconds * 1000);
   else await scriptedInput(page, durationSeconds * 1000);
   const captureName = `${scenario}-${width}x${height}-dpr${dpr}`.replaceAll('.', '_');
   // Read the measured interval before capture. High-resolution screenshots can
@@ -163,6 +199,11 @@ try {
       },
     };
   });
+  guideActive = false;
+  if (guideTask) {
+    await guideTask;
+    await page.mouse.up();
+  }
   if (drive === 'tuck') await page.keyboard.up('KeyS');
   await page.screenshot({ path: path.join(reportDirectory, `${captureName}.png`) });
   const canvasPixels = pageData.canvas.pixelWidth * pageData.canvas.pixelHeight;
@@ -172,7 +213,8 @@ try {
     quality,
     browser: browserName,
     backend,
-    route: { seed, section, start, drive, avalanche, lead: Number.isFinite(lead) ? lead : null },
+    route: { seed, section, start, drive, avalanche, lead: Number.isFinite(lead) ? lead : null,
+      wave, forkRange, replayFile: replayFile || null },
     durationSeconds,
     viewport: { width, height, dpr },
     canvas: { ...pageData.canvas, pixels: canvasPixels },
@@ -181,6 +223,7 @@ try {
     canvasVisible: await page.locator('#game-canvas').isVisible(),
     errors,
     metrics: pageData.metrics,
+    metricsStart,
   };
   const fileName = `${captureName}.json`;
   await writeFile(path.join(reportDirectory, fileName), JSON.stringify(result, null, 2));
@@ -188,8 +231,10 @@ try {
   if (!result.canvasVisible || errors.length > 0) process.exitCode = 1;
   console.log(JSON.stringify(result, null, 2));
 } finally {
+  guideActive = false;
+  await guideTask?.catch(() => undefined);
   await browser?.close();
-  server.kill();
+  server?.kill();
 }
 
 declare global {

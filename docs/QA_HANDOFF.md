@@ -1,5 +1,172 @@
 # Powderline QA handoff
 
+## Mountain trail pass
+
+Local branch `codex/mountain-trail-pass`. The comparison build is
+`4f7e1e6e` on `codex/endless-mountain`. Gameplay is at `a488a2b`. Start Vite with
+`npm run dev -- --host 127.0.0.1`. Seed **1729** starts at
+[the summit](http://localhost:5173/?seed=1729). Take **left → left → right →
+left → right**, then straight, to see every trail and a fresh Gate Run layout.
+
+| Moment | Direct start | What to try |
+| --- | --- | --- |
+| Physical fork | [Pine fork](http://localhost:5173/?seed=1729&scenario=fork) | Read the overhead board and destination flags, then tuck through a mouth. |
+| Pine Glades | [Grove before the glade](http://localhost:5173/?seed=1729&section=pine&scenario=encounter) | Take the wide line around the outcrop, then try the narrower trees-side line. |
+| Gate Run | [First combination](http://localhost:5173/?seed=1729&section=gate&scenario=encounter) | Coast through the pair, then use the longer cross-slope setup. Seed [2718](http://localhost:5173/?seed=2718&section=gate&scenario=encounter) changes the rhythm. |
+| Big Air Park | [First crevice](http://localhost:5173/?seed=1729&section=air&scenario=encounter) | Tuck on the approach, coast to see a short jump, or follow either green bypass marker. |
+| Needle Chute | [First rock bend](http://localhost:5173/?seed=1729&section=chute&scenario=encounter) | Brake before the sidewalls sweep in. Aim around the interior boulder before opening your speed in the pocket. |
+| Avalanche Alley | [First warning marks](http://localhost:5173/?seed=1729&section=avalanche&scenario=encounter) | Move toward the amber arrows and alternate sides as the warning changes. Stay in the current safe lane until the snow passes. |
+
+Fork signs project from fixed mountain coordinates. The final three openings
+are centered at −18, 0, and +18 m, with lane boundaries at −9 and +9 m.
+The piste narrows to these mouths, and the adjoining section shares its seam.
+Earlier destination signs give riders time to set up the turn.
+
+The old ramp rendered a normalized soft mask enlarged with the asset. At
+the showcase scale, its fixed edge transition covered roughly 0.8 world
+meters. The mountain ramps now use camera-relative meshes with a distinct
+lip. The ravine outline defines the same collision region used to determine
+clearance. Tree and rock obstacles also frame the bypasses.
+
+The avalanche uses 3–5 alternating downhill sweeps, producing 2–4 required
+side changes depending on the seed. The rendered leading edge and the skier
+and rider hit checks share the same curve and lane boundary. A passed sweep
+can still overtake riders ahead. F3 and `__POWDERLINE_METRICS__` expose the
+current warning, direction, wave number, passes, and NPC engulfments.
+
+Version 7 records the new collision and encounter rules. Version 6
+mountain recordings can be opened on the original branch. Classic version 5
+remains supported. Use **R** or **Retry Section** to reset the current
+section and its encounter state. **Restart at the Top** rolls a fresh seed.
+
+### Reproduce the evidence
+
+```powershell
+npm run lint
+npm test
+npm run build
+npm run qa:endless -- --headed
+npm run qa:endless -- --tour
+npm run qa:endless -- --replay-tour
+npx tsx tools/qa/endless-tuning.ts
+npx tsx tools/qa/trail-matched-captures.ts
+npx tsx tools/qa/trail-matched-captures.ts --mobile-chute
+npm run qa:mobile
+npm run benchmark:matrix
+```
+
+Captures, runs, and screenshots live under `tools/reports/trail-pass`.
+The paired `before-*` and `after-*` PNGs use seed 1729 and fixed capture
+waypoints. Open a saved input sequence by appending its `.replay.txt` content
+to `http://localhost:5173/#replay=`. The headed encounter driver uses ordinary
+keyboard and drag events. The fixed-step sweeps exercise course physics
+without graphics. The `--double` tour and `--replay-tour` checks can shorten
+verification wall time, and their timing is separate from benchmark data.
+
+### Playtest results and decisions
+
+- Headed Chrome drove both Pine lines, a tucked right fork, two gate sequences
+  with a deliberate miss and recovered streak, the crevice at tuck and coast
+  speeds, and the crevice bypass. The same Needle Chute layout cleared under
+  a guided brake line and crashed on a straight tucked charge.
+- The seed-1729 encounter cleared three avalanche sweeps with an
+  [NPC engulfment](../tools/reports/trail-pass/avalanche-npc-engulfed.png).
+  Starting the first crossing late was recoverable. Holding that side for the
+  second sweep caused a crash. Retry restored the same layout and cleared the
+  wave and NPC-hit counters. A second attempt held straight tuck and was
+  caught. Restart at the Top began a new seed.
+- The 12-seed fixed-step sweep cleared both Pine lines on all 12 layouts.
+  Coasting and braking cleared the first 12 slalom gates with guided steering.
+  Tuck cleared 4–7. On seed 1729 braking and coasting traveled 6.65 and
+  27.26 m before the crevice failure. Tuck cleared it at 48.21 m.
+- The guided chute line reached the recovery pocket on all 12 layouts
+  while braking or coasting. A straight tuck cleared none. With a standing
+  entry into the first avalanche sweep, a 44 m gap left enough time on all
+  12 tested seeds. At 36 m, 6 of 12 escaped. At 28 m, all were caught.
+- Four mobile-emulation profiles passed in both orientations. The
+  [narrow-landscape fork](../tools/reports/mobile-lifecycle/narrow-landscape-fork-tuck.png)
+  accepted native two-finger tuck and carve events at more than 30 m/s.
+  The [chute pinch replay](../tools/reports/trail-pass/chute-narrow-landscape.png)
+  was reviewed at the same viewport. Human feel and physical mobile device
+  checks are pending.
+- The final headless browser tour covered 9.46 km and six forks with ordinary
+  mouse-drag input at 2× playback clock. It cleared the five-sweep avalanche
+  variant and registered 16 rider engulfments there. It reached the seventh
+  section with 60 clean gates, two retained sections, 384 trail samples, and
+  901 compressed input runs. In the final 98 wall-clock seconds, the eight
+  Chrome processes used 576–595 MiB of private memory. JS heap at exit was
+  about 30 MiB. The browser tour clock was accelerated for route verification.
+  The same 42.6 KB input sequence reproduced the seventh section ID, lane
+  choice, and 60-gate total on the potato preset.
+- Lint, 42 tests across 11 files, and the production build passed. Tests
+  include route joins and reachability across 256 seeds, repeated wake
+  collisions, and retention over more than 60 simulated sections.
+
+Use the first playtest to choose how inviting the scenic glade line should
+look, whether the showcase crevice should demand a sustained tuck, and whether
+the avalanche's late-crossing margin feels fair once riders are in the way.
+
+| Matched capture | Before | After |
+| --- | --- | --- |
+| Fork approach | [UI cards](../tools/reports/trail-pass/before-fork-approach.png) | [Overhead approach](../tools/reports/trail-pass/after-fork-approach.png) |
+| Fork mouths | [Painted lanes](../tools/reports/trail-pass/before-fork-mouths.png) | [Entrance gantries](../tools/reports/trail-pass/after-fork-mouths.png) |
+| Ramp 1440×900 | [Soft mask](../tools/reports/trail-pass/before-ramp-medium.png) | [Modeled lip](../tools/reports/trail-pass/after-ramp-medium.png) |
+| Ramp potato 1280×720 | [Soft mask](../tools/reports/trail-pass/before-ramp-potato.png) | [Modeled lip](../tools/reports/trail-pass/after-ramp-potato.png) |
+
+The input record for the complete descent is
+[`tour-5-commit.replay.txt`](../tools/reports/trail-pass/tour-5-commit.replay.txt).
+For short motion checks, use `fork-right-tuck.replay.txt`,
+`pine-scenic-rejoin.replay.txt`, `gate-second-combination.replay.txt`,
+`air-landing-medium.replay.txt`, `chute-recovery.replay.txt`, and
+`avalanche-all-crossings.replay.txt` from the same folder.
+
+### Benchmark commands
+
+```powershell
+npm run benchmark -- --duration=5 --warmup=3 --scenario=trail-after-smoke
+npm run benchmark:potato -- --duration=5 --warmup=3 --scenario=trail-after-potato
+npm run benchmark -- --seed=1729 --start=fork --fork-range=125 --drive=tuck --duration=4 --warmup=1 --scenario=trail-match-after-fork
+npm run benchmark -- --seed=1729 --section=chute --start=encounter --drive=chute --duration=4 --warmup=4 --scenario=trail-match-after-chute
+npm run benchmark -- --seed=1729 --section=avalanche --start=encounter --replay-file=tools/reports/trail-pass/avalanche-all-crossings.replay.txt --drive=coast --avalanche=chasing --wave=1 --lead=26 --duration=1 --warmup=1 --scenario=trail-match-after-chase
+```
+
+For comparison, serve the original build from `4f7e1e6e` on a separate
+loopback port and pass its URL with `--url`. Use `--drive=tuck` and omit
+`--wave` for the original single-front chase. Matched PNGs can be captured
+against that preview with `POWDERLINE_QA_URL` and `--before`.
+
+The production comparisons use headless Chrome 157, the default WebGPU
+backend, DPR 1, and the same Windows host. The desktop, potato, and fork
+comparisons use identical input policies. The chute guide follows each
+edition's center line, so the revised tighter bend produces more braking.
+
+| Scenario | Canvas pixels | Before median / P95 / P99 | After median / P95 / P99 | Frames >50 ms before / after |
+| --- | ---: | --- | --- | --- |
+| Desktop smoke | 998,560 | 16.70 / 16.90 / 17.00 ms | 16.70 / 16.90 / 17.00 ms | 0 / 0 |
+| Potato smoke | 921,600 | 16.70 / 16.90 / 17.00 ms | 16.70 / 16.90 / 17.00 ms | 0 / 0 |
+| Tucked fork | 998,560 | 16.70 / 16.90 / 17.00 ms | 16.70 / 16.90 / 17.00 ms | 0 / 0 |
+| Wooded chute | 998,560 | 16.70 / 16.90 / 17.00 ms | 16.70 / 16.90 / 17.00 ms | 0 / 0 |
+| Active avalanche, one-second window | 998,560 | 16.70 / 17.00 / 17.00 ms | 16.70 / 17.00 / 17.00 ms | 0 / 0 |
+
+The guided chute averaged 0.184 → 0.217 ms in simulation, 0.012 →
+0.014 ms in collision, 0.059 → 0.065 ms in render preparation, and
+0.859 → 0.864 ms in CPU submission. The fork averaged 0.900 → 0.970 ms in
+CPU submission. These subsystem measurements are CPU times.
+
+The revised chase sample used recorded input from the successful run so
+the pilot could reliably reach the second moving sweep. Both versions
+remained in the chasing phase for the entire sample. The revised sample had
+six NPC hits recorded by its end. Chase CPU submission averaged
+0.716 → 0.733 ms. The scripted tuck traverse was excluded after it collided
+with an NPC upstream of the sample window.
+
+All eight profiles in the [production matrix](../tools/reports/performance-matrix.json)
+passed at 16.70 / 16.90 / 17.00 ms median/P95/P99. Every measured comparison
+and matrix profile had zero frames over 50 ms. Raw benchmark JSON and
+screenshots use the `trail-*` file prefixes in `tools/reports`.
+
+---
+
 ## Endless Mountain local playtest
 
 - Checkout `C:\Users\tyler\Powderline` on `codex/endless-mountain`, based on
