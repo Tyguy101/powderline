@@ -33,6 +33,7 @@ import type { MountainRun } from '../simulation/MountainRun';
 const BASE_VIEW_HEIGHT = 80;
 
 export class GameRenderer {
+  readonly view = { x: 0, y: 0, width: BASE_VIEW_HEIGHT, height: BASE_VIEW_HEIGHT };
   readonly renderer: WebGPURenderer;
   private readonly scene = new Scene();
   private readonly camera = new OrthographicCamera(-1, 1, 1, -1, 0.1, 10);
@@ -157,6 +158,8 @@ export class GameRenderer {
       (baseLookAhead + speedLookAhead * speedLookAheadRange);
     this.cameraWorldY +=
       (targetY - this.cameraWorldY) * (1 - Math.exp(-deltaSeconds * 5.5));
+    this.view.x = this.cameraWorldX;
+    this.view.y = this.cameraWorldY;
     this.shakeTime = Math.max(0, this.shakeTime - deltaSeconds);
   }
 
@@ -166,6 +169,10 @@ export class GameRenderer {
     origin: Readonly<WorldPosition>,
     npcs: readonly Readonly<NpcState>[],
   ): void {
+    this.view.x = this.cameraWorldX;
+    this.view.y = this.cameraWorldY;
+    this.view.width = this.viewWidth;
+    this.view.height = this.viewHeight;
     const preparationStarted = performance.now();
     resolveSkierPose(state, input, this.poseOverride, this.pose);
     const pose = this.pose;

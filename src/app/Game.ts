@@ -20,7 +20,7 @@ import { TimingCounter } from '../instrumentation/PerformanceCounters';
 import { LifecycleManager, type LifecyclePauseReason } from './LifecycleManager';
 import { MountainRun } from '../simulation/MountainRun';
 import { MountainHUD } from '../ui/MountainHUD';
-import { laneAt, pathCenter, pathHalfWidth } from '../world/EndlessMountain';
+import { hitsJumpObstacle, jumpAtLip, laneAt, pathCenter, pathHalfWidth } from '../world/EndlessMountain';
 
 export class Game {
   private readonly physics = new SkiPhysics();
@@ -89,7 +89,7 @@ export class Game {
       this.mountain,
     );
     this.hud = new HUD(root, config, () => this.setPaused(!this.paused));
-    if (this.mountain) this.mountainHUD = new MountainHUD(root, this.mountain);
+    if (this.mountain) this.mountainHUD = new MountainHUD(root, this.mountain, this.renderer.view);
     this.input = new InputManager(
       canvas,
       (connected) => this.hud.setControllerConnected(connected),
@@ -170,7 +170,9 @@ export class Game {
           ) {
             const wall = this.collision.queryWall(state);
             const hit = wall ?? this.collision.query(state);
-            if (hit && hit.feature.type !== 'none') {
+            if (!hit && this.mountain && jumpAtLip(this.mountain.section, this.before, state.position)) {
+              this.physics.beginJump();
+            } else if (hit && hit.feature.type !== 'none') {
               if (hit.feature.type === 'ramp') {
                 this.physics.beginJump();
               } else {
@@ -238,10 +240,17 @@ export class Game {
           this.collisionTiming.push(performance.now() - collisionStarted);
           if (this.mountain && !state.crashed && !this.npcInspectionActive) {
             this.keepInsidePiste();
-            const outcome = this.mountain.advance(this.before, state.position, state.airborne, delta);
-            if (outcome === 'caught') this.physics.crash();
-            if (outcome === 'transition') this.saveCheckpoint();
+            if (this.collisionsEnabled && hitsJumpObstacle(this.mountain.section, state.position, state.airborneHeight)) {
+              this.physics.crash();
+            } else {
+              const outcome = this.mountain.advance(this.before, state.position, state.airborne, delta);
+              if (outcome === 'caught') this.physics.crash();
+              if (outcome === 'transition') this.saveCheckpoint();
+            }
+          } else {
+            this.mountain?.driftAfterCrash(delta);
           }
+          if (this.mountain && this.npcSimulationEnabled) this.npcs.engulf(this.mountain);
           if (
             this.physics.state.crashed &&
             !this.crashPromptShown &&
@@ -422,10 +431,10 @@ export class Game {
     this.origin.update(state.position);
     const snapshot = this.metrics.push(frameMs);
     const touchDiagnostics = this.input.touchDiagnostics;
-    this.mountainHUD?.update(state);
     this.hud.updateTouchDiagnostics(touchDiagnostics);
     if (!this.paused || this.renderWhilePaused) {
       this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
+      this.mountainHUD?.update(state);
       this.renderWhilePaused = false;
     }
     this.metricsPublishCountdown -= 1;
@@ -490,10 +499,19 @@ export class Game {
           forkLane: laneAt(section, state.position.x), lastLane: lastLane ?? 'none',
           leftTrail: section.offers[0]!.trail, straightTrail: section.offers[1]!.trail, rightTrail: section.offers[2]!.trail,
           gateIndex, gateStreak, gateOutcome, cleanGates, nextGateX: gate?.x ?? 0, nextGateY: gate?.y ?? 0,
-          avalanche, avalancheFront: front, shelterEdge: section.slide?.shelterEdge ?? 0,
-          shelterStart: section.slide?.shelterStart ?? 0, shelterEnd: section.slide?.shelterEnd ?? 0,
+          avalanche, avalancheFront: front, wave: this.mountain.waveIndex, wavesCleared: this.mountain.wavesCleared,
+          waveCount: section.waves.length, safeSide: this.mountain.wave?.safeSide ?? 0,
+          safeEdge: this.mountain.wave?.safeEdge ?? 0, waveTrigger: this.mountain.wave?.trigger ?? 0,
+          npcEngulfments: this.mountain.npcEngulfments,
+          npcEngulfedVisible: String(this.npcs.states.some((npc) =>
+            npc.active && npc.fall !== 'none' && npc.avalancheHit === this.mountain!.waveKey &&
+            Math.abs(npc.y - this.renderer.view.y) < this.renderer.view.height / 2 - 4 &&
+            Math.abs(npc.x - this.renderer.view.x) < this.renderer.view.width / 2 - 4)),
+          gladeY: section.glade?.y ?? 0, gladeSide: section.glade?.relaxedSide ?? 0,
           pisteCenter: pathCenter(section, state.position.y), pisteHalfWidth: pathHalfWidth(section, state.position.y),
           pisteAheadX: pathCenter(section, state.position.y + 20),
+          pisteGuideX: pathCenter(section, state.position.y + Math.min(16, state.velocityY * 0.59 + 3)),
+          pisteAheadWidth: pathHalfWidth(section, state.position.y + 18),
           retainedSections: previous ? 2 : 1, replayRuns: this.replay.recordingRuns,
           velocityX: state.velocityX, velocityY: state.velocityY,
           jumpSequence: state.jump.sequence,

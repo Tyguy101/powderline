@@ -3,7 +3,8 @@ import {
 } from 'three/webgpu';
 import type { MountainRun } from '../simulation/MountainRun';
 import {
-  FORK_LENGTH, LANE_SPACING, TRAILS, pathCenter, pathHalfWidth, type Section,
+  FORK_BANNER_OFFSET, FORK_COLORS, FORK_ENTRANCE_OFFSET, FORK_GUIDE_OFFSET,
+  FORK_LENGTH, LANE_SPACING, jumpGapEdge, pathCenter, pathHalfWidth, type JumpLine, type Section,
 } from '../world/EndlessMountain';
 import { createAvalancheShader } from './shaders/avalanche';
 
@@ -94,6 +95,7 @@ export class MountainRenderer {
   private revision = -1;
   private band = Number.NaN;
   private bandHeight = 0;
+  private nextGate = -1;
 
   get drawCalls(): number {
     return Number(this.terrain.mesh.geometry.drawRange.count > 0) +
@@ -102,16 +104,20 @@ export class MountainRenderer {
 
   update(run: MountainRun, cameraX: number, cameraY: number, viewHeight: number): void {
     const band = Math.floor(cameraY / 18);
-    if (run.revision !== this.revision || band !== this.band || viewHeight !== this.bandHeight) {
+    if (run.revision !== this.revision || band !== this.band || viewHeight !== this.bandHeight ||
+      run.gateIndex !== this.nextGate) {
       this.revision = run.revision;
       this.band = band;
       this.bandHeight = viewHeight;
+      this.nextGate = run.gateIndex;
       const min = band * 18 - viewHeight / 2 - 22;
       const max = band * 18 + viewHeight / 2 + 40;
       this.terrain.clear(run.section.center, band * 18);
       this.course.clear(run.section.center, band * 18);
       for (const section of [run.previous, run.section]) {
-        if (section && min < section.end && max > section.start - 35) this.section(section, min, max);
+        if (section && min < section.end && max > section.start - 35) {
+          this.section(section, min, max, section === run.section ? run.gateIndex : -1);
+        }
       }
       this.terrain.finish();
       this.course.finish();
@@ -121,8 +127,8 @@ export class MountainRenderer {
     this.updatePowder(run, cameraX, cameraY, viewHeight);
   }
 
-  private section(section: Section, min: number, max: number): void {
-    const { center, start, end, trail, opening, slide } = section;
+  private section(section: Section, min: number, max: number, nextGate: number): void {
+    const { center, start, end, trail, opening, glade } = section;
     const [light, dark, rim] = PALETTE[trail];
     for (let y = start + Math.max(0, Math.floor((min - start) / 5)) * 5; y < Math.min(max, end); y += 5) {
       const next = Math.min(end, y + 5);
@@ -157,55 +163,116 @@ export class MountainRenderer {
       }
     }
     if (opening && start + 34 >= min && start - 30 < max) this.summit(center, start);
-    if (trail === 'pine') {
-      const y = start + 365 + section.variant * 44;
-      if (y >= min - 16 && y <= max + 16) {
-        const x = center + ((section.id & 1) === 0 ? 24 : -24);
-        this.terrain.strip('#d6e8e7', x - 11, x + 5, y - 12, x - 6, x + 13, y + 16);
-        this.beacon(x, y + 9, '#197a6c');
-      }
-    }
+    if (glade && glade.y - 52 < max && glade.y + 47 > min) this.glade(section);
     for (let i = 0; i < section.gates.length; i += 1) {
       const gate = section.gates[i]!;
       if (gate.y < min || gate.y > max) continue;
       const [flag, pole] = i % 2 ? BLUE : WARM;
+      if (i === nextGate) {
+        this.terrain.strip('#fff0ad', gate.x - gate.halfWidth - 1.5, gate.x + gate.halfWidth + 1.5, gate.y - 2,
+          gate.x - gate.halfWidth, gate.x + gate.halfWidth, gate.y + 1.4);
+      }
       this.terrain.box(i % 2 ? '#bed9f1' : '#f2cebf', gate.x, gate.y, 2 * gate.halfWidth, 1.05);
       for (const x of [gate.x - gate.halfWidth, gate.x + gate.halfWidth]) {
         this.course.box('#4f677e', x + 0.42, gate.y + 0.3, 0.75, 2.6);
         this.course.box(pole, x, gate.y - 1, 0.56, 4.5);
-        this.course.triangle(flag, x, gate.y - 3, x + Math.sign(x - gate.x) * 2.8,
+        this.course.triangle(i === nextGate ? '#edab30' : flag, x, gate.y - 3, x + Math.sign(x - gate.x) * 2.8,
           gate.y - 2.4, x, gate.y - 0.6);
       }
       this.terrain.triangle(i % 2 ? '#d9e7f2' : '#f1e6df', gate.x - 10, gate.y - 1,
         gate.x, gate.y - 11, gate.x + 10, gate.y - 1);
     }
-    for (const ramp of section.features) {
-      if (ramp.type !== 'ramp' || ramp.y + 57 < min || ramp.y - 17 > max) continue;
-      this.terrain.strip('#dce0f2', ramp.x - 2.5, ramp.x + 2.5, ramp.y - 16,
-        ramp.x - 6.4, ramp.x + 6.4, ramp.y + 53);
-      for (let y = ramp.y + 20; y < ramp.y + 54; y += 6) {
-        this.course.box('#a5abd0', ramp.x - 5, y, 0.32, 1.85);
-        this.course.box('#a5abd0', ramp.x + 5, y, 0.32, 1.85);
-      }
-      this.chevron(ramp.x, ramp.y - 10, 2.2, '#ab75ac');
+    for (const jump of section.jumps) {
+      if (jump.gapEnd + 30 >= min && jump.lip - 35 <= max) this.jump(jump);
     }
-    if (slide && slide.shelterStart < max && slide.shelterEnd > min) {
-      for (const side of [-1, 1]) {
-        const edge = center + slide.shelterEdge * side;
-        const outer = center + 41 * side;
-        const first = Math.max(min - 4, slide.shelterStart);
-        const last = Math.min(max + 4, slide.shelterEnd);
-        this.terrain.strip('#c9e8e0', edge, outer, first, edge, outer, last);
-        this.course.strip('#61a99c', edge, edge + side * 0.62, first, edge, edge + side * 0.62, last);
-        for (let y = slide.shelterStart + 4; y <= last; y += 19) {
-          if (y >= first) this.chevron(edge + side * 7, y, 3, '#439486');
-        }
-        if (slide.shelterStart >= min && slide.shelterStart <= max) {
-          this.beacon(edge + side * 10, slide.shelterStart, '#177c71');
-        }
+    for (const wave of section.waves) {
+      if (wave.warningAt > max || wave.trigger + 110 < min) continue;
+      const edge = center + wave.safeSide * wave.safeEdge;
+      const begin = Math.max(min, wave.warningAt + 19);
+      const endFlags = Math.min(max, wave.trigger + 110);
+      for (let y = wave.warningAt + 28; y < endFlags; y += 19) {
+        if (y < begin) continue;
+        this.beacon(edge, y, '#c17a24');
+        const x = edge + wave.safeSide * 5.9;
+        this.course.triangle('#a56a24', x - wave.safeSide * 4, y - 3.5,
+          x - wave.safeSide * 4, y + 3.5, x + wave.safeSide * 3.5, y);
+      }
+      this.beacon(center - wave.safeSide * 32, wave.warningAt + 21, '#b43f36');
+      this.beacon(edge + wave.safeSide * 12, wave.warningAt + 21, '#387a79');
+    }
+    if (end - FORK_BANNER_OFFSET - 5 < max) this.junction(section);
+  }
+
+  private glade(section: Section): void {
+    const { islandX: x, y, relaxedSide } = section.glade!;
+    const scenic = -relaxedSide;
+    this.terrain.strip('#d1e4e8', x - 1.5, x + 2, y - 22, x - 8, x + 6, y - 8);
+    this.terrain.strip('#d1e4e8', x - 8, x + 6, y - 8, x - 10.4, x + 8.9, y + 7);
+    this.terrain.strip('#c2dade', x - 10.4, x + 8.9, y + 7, x - 6, x + 1.5, y + 27);
+    this.course.triangle('#f2f8f9', x - 7, y - 9, x + 4.2, y - 10, x + 5.2, y + 13);
+    for (const side of [relaxedSide, scenic]) {
+      const wide = side === relaxedSide;
+      const entry = section.center + side * (wide ? 4 : 6);
+      const apex = section.center + side * (wide ? 13 : 27);
+      const width = wide ? 6 : 3.3;
+      this.terrain.strip('#eff7f8', entry - 3, entry + 3, y - 43, apex - width, apex + width, y - 4);
+      this.terrain.strip('#eff7f8', apex - width, apex + width, y - 4,
+        apex - width, apex + width, y + 15);
+      this.terrain.strip('#edf6f7', apex - width, apex + width, y + 15,
+        section.center + side * 4 - 2, section.center + side * 4 + 2, y + 58);
+      this.beacon(entry, y - 32, wide ? '#337f78' : '#47779c');
+    }
+  }
+
+  private jump(line: JumpLine): void {
+    const { x, lip, gapStart, gapEnd, halfWidth, gapHalfWidth, kind } = line;
+    const left = x - gapHalfWidth;
+    const right = x + gapHalfWidth;
+    this.terrain.strip('#ddebf0', x - halfWidth - 2, x + halfWidth + 2, lip - 24,
+      x - halfWidth - 1, x + halfWidth + 1, lip + 6);
+    this.terrain.strip('#dae9ed', left, right, gapEnd, x - 5.5, x + 5.5, gapEnd + 26);
+    this.course.strip('#b6cad6', x - halfWidth - 0.9, x + halfWidth + 0.9, lip - 10.65,
+      x - halfWidth - 0.9, x + halfWidth + 0.9, lip + 2.7);
+    this.course.strip('#a53a31', x - halfWidth, x + halfWidth, lip - 10,
+      x - halfWidth, x + halfWidth, lip);
+    this.course.strip('#cd5340', x - halfWidth + 0.55, x + halfWidth - 0.55, lip - 9,
+      x - halfWidth + 0.55, x + halfWidth - 0.55, lip - 1.05);
+    for (const side of [-1, 1]) {
+      this.course.box('#fff2db', x + side * (halfWidth - 0.68), lip - 5, 0.46, 8);
+      this.chevron(x + side * (gapHalfWidth + 8.5), lip - 12, 2.4, '#679b9b');
+      this.beacon(x + side * (gapHalfWidth + 8.5), lip - 4, '#3d8b81');
+      this.beacon(x + side * (gapHalfWidth + 1.4), gapEnd + 1, '#497e91');
+    }
+    this.chevron(x, lip - 5, 1.75, '#fff3cb');
+    this.course.box('#fff3cb', x, lip - 0.25, halfWidth * 2, 0.54);
+    for (let i = 0; i < 4; i += 1) {
+      const y = gapStart + (gapEnd - gapStart) * i / 4;
+      const next = gapStart + (gapEnd - gapStart) * (i + 1) / 4;
+      this.terrain.strip(kind === 'crevice' ? '#244c69' : '#a7bac1',
+        jumpGapEdge(line, y, -1), jumpGapEdge(line, y, 1), y,
+        jumpGapEdge(line, next, -1), jumpGapEdge(line, next, 1), next);
+    }
+    const upperLeft = jumpGapEdge(line, gapStart, -1);
+    const upperRight = jumpGapEdge(line, gapStart, 1);
+    const lowerLeft = jumpGapEdge(line, gapEnd, -1);
+    const lowerRight = jumpGapEdge(line, gapEnd, 1);
+    for (let i = 0; i < 5; i += 1) {
+      const a = upperLeft + i * (upperRight - upperLeft) / 5;
+      const b = a + (upperRight - upperLeft) / 5;
+      if (kind === 'crevice') {
+        const low = lowerLeft + i * (lowerRight - lowerLeft) / 5;
+        const bottomWidth = (lowerRight - lowerLeft) / 5;
+        this.course.triangle('#527c93', a, gapStart, b, gapStart, b - 1.0, gapStart + 4 + (i % 2) * 4);
+        this.course.triangle('#95b7c7', low, gapEnd, low + bottomWidth, gapEnd,
+          low + bottomWidth * 0.6, gapEnd - 4 - (i % 3) * 2.2);
+      } else {
+        const y = gapStart + 2 + i % 2 * 3.7;
+        this.course.triangle(kind === 'rocks' ? '#627987' : '#41705f',
+          a, gapEnd, b, gapEnd, (a + b) / 2, y);
+        this.course.triangle('#e3edf0', a + 0.53, y + 3, (a + b) / 2, y, b - 0.4, y + 3);
       }
     }
-    if (end - FORK_LENGTH < max) this.junction(section);
+    this.course.box('#f5fbfc', x, gapEnd + 1, 2 * gapHalfWidth, 0.55);
   }
 
   private summit(x: number, y: number): void {
@@ -227,20 +294,39 @@ export class MountainRenderer {
   private junction(section: Section): void {
     const { center, end } = section;
     const entry = end - FORK_LENGTH;
-    this.terrain.strip('#d5e8eb', center - 36, center + 36, entry,
-      center - 36, center + 36, end);
+    this.gantry(center, end - FORK_BANNER_OFFSET, 33, '#203c49');
     for (const offer of section.offers) {
       const x = center + offer.lane * LANE_SPACING;
-      const color = TRAILS[offer.trail].color;
-      this.terrain.strip('#edf5f6', x * 0.66 + center * 0.34 - 5, x * 0.66 + center * 0.34 + 5, entry,
-        x - (offer.lane < 0 ? 18.8 : 8.65), x + (offer.lane > 0 ? 18.8 : 8.65), end);
-      this.beacon(x - 6.5, end - 16, color);
-      this.beacon(x + 6.5, end - 16, color);
-      this.chevron(x, end - 12, 3.8, color);
-      this.chevron(x, end - 5, 3.1, color);
+      const color = FORK_COLORS[offer.lane + 1]!;
+      this.gantry(x, end - FORK_GUIDE_OFFSET, 16.7, color);
+      this.gantry(x, end - FORK_ENTRANCE_OFFSET, 16.7, color);
+      const merge = center + offer.lane * 9;
+      this.terrain.strip('#e4f0f3', merge - 3, merge + 3, entry + 20, x - 7.4, x + 7.4, end - 44);
+      this.terrain.strip('#e4f0f3', x - 7.4, x + 7.4, end - 44, x - 8.6, x + 8.6, end);
+      for (const offset of [-4.2, 4.2]) {
+        this.terrain.strip('#dcebef', merge + offset - 0.24, merge + offset + 0.24, entry + 30,
+          x + offset - 0.4, x + offset + 0.4, end - 44);
+        this.terrain.strip('#dcebef', x + offset - 0.4, x + offset + 0.4, end - 44,
+          x + offset - 0.4, x + offset + 0.4, end);
+      }
+      this.chevron(x, end - 16, 3.5, '#6a8991');
     }
     for (const offset of [-LANE_SPACING / 2, LANE_SPACING / 2]) {
-      for (let y = end - 21; y < end; y += 3.35) this.course.box('#86aab5', center + offset, y, 0.43, 1.65);
+      const x = center + offset;
+      this.terrain.strip('#bcd3dc', x - 0.5, x + 0.5, end - 57, x - 3.1, x + 3.1, end - 41);
+      this.terrain.strip('#bcd3dc', x - 3.1, x + 3.1, end - 41, x - 0.3, x + 0.3, end - 5);
+      this.course.triangle('#f1f8fa', x, end - 57, x - 2.5, end - 37, x, end - 7);
+      this.course.triangle('#d9eaee', x, end - 57, x + 2.2, end - 39, x, end - 7);
+    }
+  }
+
+  private gantry(x: number, y: number, width: number, color: string): void {
+    this.course.box('#51606a', x + 1, y + 2.5, width + 1.2, 0.9);
+    this.course.box(color, x, y - 0.55, width, 1.65);
+    for (const side of [-1, 1]) {
+      const post = x + side * width * 0.49;
+      this.course.box('#564936', post, y + 0.1, 0.7, 4.2);
+      this.course.box('#f2eee6', post, y + 2.2, 1.5, 1);
     }
   }
 
@@ -256,14 +342,20 @@ export class MountainRenderer {
   }
 
   private updatePowder(run: MountainRun, x: number, y: number, height: number): void {
-    const { slide, center } = run.section;
+    const { center } = run.section;
+    const wave = run.wave;
     const front = run.front;
-    this.powder.visible = !!slide && run.front > 0 &&
-      front > y - height / 2 - 3 && front - 44 < y + height / 2;
-    if (!this.powder.visible || !slide) return;
+    this.powder.visible = !!wave && run.front > 0 &&
+      front > y - height / 2 - 3 && front - 55 < y + height / 2;
+    if (!this.powder.visible || !wave) return;
+    const across = (wave.safeEdge - 43) / 2;
+    const halfWidth = (wave.safeEdge + 43) / 2;
     this.avalanche.phase.value = front - run.section.start;
-    this.avalanche.halfWidth.value = slide.shelterEdge;
-    this.powder.scale.set(slide.shelterEdge * 2, 46, 1);
-    this.powder.position.set(center - x, y - front + 21, 0.43);
+    this.avalanche.halfWidth.value = halfWidth;
+    this.avalanche.side.value = wave.safeSide;
+    this.avalanche.acrossCenter.value = across;
+    this.powder.scale.set(halfWidth * 2, 56, 1);
+    this.powder.position.set(center + across * wave.safeSide - x, y - front + 26,
+      run.avalanche === 'caught' ? 0.58 : 0.43);
   }
 }

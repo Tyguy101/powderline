@@ -4,7 +4,7 @@ import { MountainRun } from '../simulation/MountainRun';
 import { deserializeReplay, ReplaySystem } from '../simulation/ReplaySystem';
 import { SkiPhysics } from '../simulation/SkiPhysics';
 import {
-  FORK_LENGTH, LANES, LANE_SPACING, TRAILS, inShelter, laneAt, openingSection,
+  FORK_LENGTH, LANES, LANE_SPACING, TRAILS, hitsJumpObstacle, jumpAtLip, laneAt, openingSection,
   pathCenter, pathHalfWidth, takeRoute, type Trail,
 } from '../world/EndlessMountain';
 import { FEATURE_CELL_SIZE, FeatureGeneratorCPU, type FeatureDescriptor } from '../world/FeatureGeneratorCPU';
@@ -36,7 +36,10 @@ function ride(
       if (wall || (hit && hit.feature.type !== 'ramp')) {
         throw new Error(`Hit wall or obstacle on seed ${run.seed} at ${JSON.stringify(physics.state.position)}`);
       }
-      if (hit) physics.beginJump();
+      if (hit || jumpAtLip(run.section, before, physics.state.position)) physics.beginJump();
+    }
+    if (collide && hitsJumpObstacle(run.section, physics.state.position, physics.state.airborneHeight)) {
+      physics.crash();
     }
     if (run.advance(before, physics.state.position, physics.state.airborne, DT) === 'caught') physics.crash();
   }
@@ -124,12 +127,16 @@ describe('Endless Mountain', () => {
       const launched = ride(jump, () => ({ ...neutral, tuck: true }),
         (physics) => physics.state.position.y > 184, true);
       expect(launched.state.jump.sequence).toBe(1);
-      expect(launched.state.jump.completedDistance).toBeGreaterThan(20);
+      expect(launched.state.crashed).toBe(false);
+      expect(launched.state.jump.completedDistance).toBeGreaterThan(40);
       expect(launched.state.jump.completedDistance).toBeLessThan(56);
       const bypass = new MountainRun(seed, { trail: 'air', scenario: 'encounter' });
       const clear = ride(bypass, (physics) => guide(physics, 28),
-        (physics) => physics.state.position.y > 350, true);
+        (physics) => physics.state.position.y > 200, true);
       expect(clear.state.jump.sequence).toBe(0);
+      const slow = new MountainRun(seed, { trail: 'air', scenario: 'encounter' });
+      const short = ride(slow, () => neutral, (physics) => physics.state.crashed, true);
+      expect(short.state.jump.sequence).toBe(1);
     }
   });
 
@@ -138,28 +145,31 @@ describe('Endless Mountain', () => {
       const run = new MountainRun(seed, { trail: 'chute', scenario: 'encounter' });
       ride(run, (physics, course) => {
         const y = physics.state.position.y;
-        return guide(physics, pathCenter(course.section, y + 20), pathHalfWidth(course.section, y) < 10.8);
+        const look = Math.min(16, physics.state.velocityY * 0.59 + 3);
+        return guide(physics, pathCenter(course.section, y + look), true);
       }, (_physics, course) => course.section.index === 1, true);
     }
   });
 
-  it('allows early and late shelter reactions and catches a missed reaction', () => {
+  it('requires repeated crossings, allows a late first reaction, and catches straight tucks', () => {
     for (let seed = 0; seed < 40; seed += 1) {
-      for (const reaction of ['early', 'late', 'missed']) {
+      for (const reaction of ['early', 'late', 'missed', 'tuck']) {
         const run = new MountainRun(seed, { trail: 'avalanche', scenario: 'encounter' });
-        const section = run.section;
-        const left = seed % 2 === 0 ? -1 : 1;
+        const waveCount = run.section.waves.length;
         let move = false;
         const skier = ride(run, (physics, course) => {
+          const wave = course.wave!;
           if (reaction === 'early' && course.avalanche === 'warning') move = true;
-          if (reaction === 'late' && course.avalanche === 'chasing' && physics.state.position.y - course.front <= 44) move = true;
-          return guide(physics, move ? left * (section.slide!.shelterEdge + 6) : 0);
-        }, (_physics, course) => course.avalanche === 'escaped' || course.avalanche === 'caught', true);
-        expect(run.avalanche, `seed ${seed}, ${reaction}`).toBe(reaction === 'missed' ? 'caught' : 'escaped');
-        expect(skier.state.crashed).toBe(reaction === 'missed');
-        if (reaction !== 'missed') expect(inShelter(section, skier.state.position)).toBe(true);
+          if (reaction === 'late' && course.avalanche === 'chasing' && physics.state.position.y - course.front <= 50) move = true;
+          return guide(physics, move ? wave.safeSide * (wave.safeEdge + 7) : 0, false, reaction === 'tuck');
+        }, (_physics, course) => course.avalanche === 'caught' ||
+          course.wavesCleared >= (reaction === 'early' ? waveCount : 1), true);
+        const caught = reaction === 'missed' || reaction === 'tuck';
+        expect(run.avalanche, `seed ${seed}, ${reaction}`).toBe(caught ? 'caught' : 'escaped');
+        expect(skier.state.crashed).toBe(caught);
         run.retry();
         expect(run.front).toBe(0);
+        expect(run.wavesCleared).toBe(0);
         expect(run.avalanche).toBe('quiet');
       }
     }
@@ -178,7 +188,7 @@ describe('Endless Mountain', () => {
     const skiCheckpoint = record.checkpoint();
     const next = mountain.section;
     const committedScore = mountain.cleanGates;
-    expect(committedScore).toBeGreaterThan(20);
+    expect(committedScore).toBeGreaterThan(18);
     const replay = new ReplaySystem(seed, recorder.serialize());
     const data = deserializeReplay(recorder.serialize());
     const duplicate = new MountainRun(seed, data.mountain!);

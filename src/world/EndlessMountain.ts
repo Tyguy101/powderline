@@ -4,20 +4,24 @@ import type { FeatureDescriptor } from './FeatureGeneratorCPU';
 
 export const TRAILS = {
   pine: { name: 'Pine Glades', difficulty: 'Normal', cue: 'Open lines through the pines', color: '#167866' },
-  gate: { name: 'Gate Run', difficulty: 'Difficult', cue: 'Alternating slalom gates', color: '#2865b8' },
+  gate: { name: 'Gate Run', difficulty: 'Difficult', cue: 'Link combinations and traverses', color: '#2865b8' },
   air: { name: 'Big Air Park', difficulty: 'Extreme', cue: 'Jump lines and clear bypasses', color: '#9a4ab4' },
   chute: { name: 'Needle Chute', difficulty: 'Extreme', cue: 'Brake before the rock narrows', color: '#a65a26' },
-  avalanche: { name: 'Avalanche Alley', difficulty: 'Dangerous', cue: 'Cut out of the slide path', color: '#b53e4d' },
+  avalanche: { name: 'Avalanche Alley', difficulty: 'Dangerous', cue: 'Follow the crossing markers', color: '#b53e4d' },
 } as const;
 
 export type Trail = keyof typeof TRAILS;
 export type MountainScenario = 'summit' | 'fork' | 'encounter';
 export type Lane = -1 | 0 | 1;
 export const LANES = [-1, 0, 1] as const;
-export const FORK_LENGTH = 64;
+export const FORK_LENGTH = 104;
 export const LANE_SPACING = 18;
-export const ENTRY_WIDTH = 37;
-export const PREVIEW_DISTANCE = 145;
+export const ENTRY_WIDTH = 27;
+export const PREVIEW_DISTANCE = 163;
+export const FORK_BANNER_OFFSET = 106;
+export const FORK_GUIDE_OFFSET = 89;
+export const FORK_ENTRANCE_OFFSET = 3;
+export const FORK_COLORS = ['#a02f32', '#e5b846', '#176344'] as const;
 export const WORLD_LOOK_BEHIND = 100;
 const MAIN_WIDTH: Record<Trail, number> = { pine: 43, gate: 36, air: 40, chute: 24, avalanche: 43 };
 
@@ -39,15 +43,27 @@ export interface CourseGate {
   halfWidth: number;
 }
 
-export interface SlidePath {
+export interface SlideWave {
   trigger: number;
-  shelterStart: number;
-  shelterEnd: number;
-  shelterEdge: number;
+  safeSide: -1 | 1;
+  safeEdge: number;
   speed: number;
   lead: number;
   warningAt: number;
 }
+
+export interface JumpLine {
+  x: number;
+  lip: number;
+  halfWidth: number;
+  gapStart: number;
+  gapEnd: number;
+  gapHalfWidth: number;
+  kind: 'crevice' | 'rocks' | 'timber';
+}
+
+interface ChuteKnot { y: number; x: number; width: number }
+interface Glade { y: number; islandX: number; relaxedSide: -1 | 1 }
 
 export interface Section {
   id: number;
@@ -62,8 +78,10 @@ export interface Section {
   offers: readonly RouteOffer[];
   gates: readonly CourseGate[];
   features: readonly FeatureDescriptor[];
-  chute: readonly number[];
-  slide: SlidePath | null;
+  chute: readonly ChuteKnot[];
+  glade: Glade | null;
+  jumps: readonly JumpLine[];
+  waves: readonly SlideWave[];
 }
 
 export function isTrail(value: unknown): value is Trail {
@@ -112,59 +130,104 @@ export function createSection(
   const end = start + length;
   const gates: CourseGate[] = [];
   const features: FeatureDescriptor[] = [];
-  const chute: number[] = [0];
+  const chute: ChuteKnot[] = [];
+  const jumps: JumpLine[] = [];
+  const waves: SlideWave[] = [];
   const side = (id & 1) === 0 ? 1 : -1;
-  if (trail === 'pine') {
-    const y = start + 365 + variant * 44;
-    const slabs = [[20, -4, 3.2], [26, 0, 4.0], [20, 4, 2.5], [30, 6, 2.2]] as const;
-    for (const [offsetX, offsetY, scale] of slabs) {
-      features.push({ id: hashCoordinates(id, offsetX, offsetY, 24), type: 'rock',
-        x: center + side * offsetX, y: y + offsetY, scale, radius: 0.88 * scale });
+  const glade: Glade | null = trail === 'pine' ? {
+    y: start + 396 + variant * 22,
+    islandX: center + side * (5 + variant),
+    relaxedSide: side === 1 ? -1 : 1,
+  } : null;
+  function obstacle(type: 'rock' | 'tree', x: number, y: number, scale: number, detail = 0): void {
+    features.push({ id: hashCoordinates(id, Math.round(x * 8), Math.round(y * 8), 24 + detail),
+      type, x, y, scale, radius: (type === 'rock' ? 0.88 : 1.05) * scale });
+  }
+  for (const divider of [-1, 1]) {
+    const x = center + divider * LANE_SPACING / 2;
+    obstacle('tree', x, end - 43, 1.9);
+    obstacle('tree', x + divider * 0.7, end - 35, 1.56);
+    obstacle('rock', x, end - 25, 1.68);
+    obstacle('rock', center + divider * 29, end - 18, 2.14);
+  }
+  if (glade) {
+    for (const [dx, dy, scale] of [[0, 0, 4.1], [4, -3, 2.5], [4, 5, 3.1], [1, 10, 2.2]] as const) {
+      obstacle('rock', glade.islandX + side * dx, glade.y + dy, scale);
     }
+    for (let row = 0; row < 7; row += 1) {
+      for (const edge of [-1, 1]) {
+        const x = center + edge * (11 + row * 1.35 + (edge === side ? 1.3 : 0));
+        const y = glade.y - 101 + row * 8;
+        for (let depth = 0; depth < 3; depth += 1) {
+          obstacle('tree', x + edge * depth * 5.1,
+            y + (hashUnit(id, row, depth, edge + 9) - 0.5) * 5 + depth * 2, 1.3 + depth * 0.27);
+        }
+      }
+    }
+    obstacle('tree', glade.islandX + side * 5, glade.y - 10, 2.0);
+    obstacle('tree', glade.islandX + side * 7, glade.y + 10, 1.78);
+    obstacle('tree', glade.islandX + side * 16, glade.y + 18, 1.58);
   }
   if (trail === 'gate') {
+    const phrases = [
+      [[-8, 43, 5.6], [-13, 28, 5.1], [8, 59, 5.7], [14, 31, 5.0], [0, 49, 6.4]],
+      [[10, 48, 5.7], [-11, 60, 5.9], [-5, 24, 4.95], [5, 37, 5.15], [12, 35, 5.4], [0, 56, 6.4]],
+      [[-12, 54, 5.5], [9, 61, 6.0], [15, 29, 5.1], [-6, 54, 5.6], [-12, 28, 5.0], [0, 48, 6.3]],
+    ] as const;
     let y = start + 112;
-    while (y < end - FORK_LENGTH - 55) {
-      const i = gates.length;
-      const distance = (i % 5 === 4 ? 6 : 8) + hashUnit(id, i, 7) * (3 + variant);
-      gates.push({ x: center + side * (i % 2 === 0 ? -distance : distance), y, halfWidth: i % 5 === 4 ? 6.5 : 5.5 });
-      y += (i % 6 === 2 ? 58 : 42) + hashUnit(id, i, 9) * 12 - variant * 3;
+    for (let phrase = 0; y < end - FORK_LENGTH - 36; phrase += 1) {
+      const shape = phrases[(phrase + variant + (phrase > 1 ? id % 3 : 0)) % phrases.length]!;
+      for (const [slot, [offset, spacing, width]] of shape.entries()) {
+        if (y >= end - FORK_LENGTH - 36) break;
+        const mirror = phrase % 2 === 0 ? side : -side;
+        y += slot === 0 ? 0 : spacing + (hashUnit(id, phrase, slot, 9) - 0.5) * 5;
+        if (y >= end - FORK_LENGTH - 36) break;
+        const jitter = (hashUnit(id, phrase, slot, 7) - 0.5) * 2;
+        gates.push({ x: center + (offset + jitter) * mirror, y, halfWidth: width });
+      }
+      y += 55 + variant * 3;
     }
   }
   if (trail === 'air') {
-    const sequences: ReadonlyArray<ReadonlyArray<readonly [number, number, number]>> = [
-      [[0, 0, 2.2], [70, 1, 2.8], [145, 1, 3.2]],
-      [[0, 0, 3.2], [105, -1, 2.8]],
-      [[0, 1, 3.1], [112, -1, 3.4]],
-      [[0, 1, 2.25], [63, 1, 2.5], [132, 1, 3.2]],
-      [[0, 0, 2.9], [95, -1, 3.55]],
-    ];
-    for (let group = 0; group < 5; group += 1) {
-      const y = start + 126 + group * 235;
-      const lateral = side * (group % 2 === 0 ? 1 : -1) * (11 + variant * 2);
-      for (const [offset, lane, scale] of sequences[group]!) {
-        features.push({
-          id: hashCoordinates(id, group, offset, 81), type: 'ramp',
-          x: center + lane * lateral, y: y + offset, radius: 0.72 * scale, scale,
-        });
-      }
+    const order = ['crevice', 'rocks', 'timber', 'crevice', 'timber', 'rocks'] as const;
+    for (let i = 0; i < order.length; i += 1) {
+      const lip = start + 130 + 197 * i + (i ? variant * 5 : 0);
+      const kind = order[i]!;
+      const x = center + (i === 0 ? 0 : (i % 2 ? side : -side) * (7 + variant * 2));
+      const reach = kind === 'crevice' ? 39 + variant : kind === 'rocks' ? 25 : 21;
+      jumps.push({ x, lip, halfWidth: kind === 'crevice' ? 5.2 : 4.3, gapStart: lip + 13,
+        gapEnd: lip + reach, gapHalfWidth: kind === 'crevice' ? 9 : 6.2, kind });
     }
   }
   if (trail === 'chute') {
-    for (let i = 1; i < Math.ceil(length / 82); i += 1) {
-      const rhythm = Math.sin(i * 1.13) * 0.72 + Math.sin(i * 0.53) * 0.28;
-      chute.push(side * rhythm * (15 + variant * 3));
+    chute.push({ y: start + 58, x: 0, width: 22 });
+    const pattern = [[43, -7, 14], [41, -18, 9], [40, 1, 7.5], [42, 15, 8.9], [47, 8, 15], [50, -6, 18]] as const;
+    let y = start + 58;
+    for (let i = 0; y < end - FORK_LENGTH - 120; i += 1) {
+      const [length, offset, width] = pattern[i % pattern.length]!;
+      y += length + variant * 2;
+      const mirror = Math.floor(i / pattern.length) % 2 ? -side : side;
+      const x = offset * mirror * (1 + variant * 0.055);
+      chute.push({ y, x, width: width - variant * 0.35 });
+      if (i % 6 === 2 || i % 6 === 4) obstacle('rock', center + x + mirror * (width - 3.1),
+        y + 3, i % 6 === 2 ? 1.88 : 2.4);
     }
-    chute.push(0);
+    chute.push({ y: end - FORK_LENGTH - 20, x: 0, width: 25 });
   }
-  const trigger = start + 305 + variant * 38;
-  const slide = trail === 'avalanche' ? {
-    trigger, warningAt: trigger - 142,
-    shelterStart: trigger + 26, shelterEnd: trigger + 375,
-    shelterEdge: 22 + variant, speed: 38 + variant * 0.5, lead: 54 - variant * 4,
-  } : null;
+  if (trail === 'avalanche') {
+    for (let i = 0; i < 3 + variant; i += 1) {
+      const trigger = start + 245 + i * (225 + 5 * variant) + Math.floor(hashUnit(id, i, 12) * 16);
+      const safeSide = (i % 2 ? -side : side) as -1 | 1;
+      const safeEdge = 10 + variant;
+      waves.push({ trigger, safeSide, safeEdge, speed: 48 + variant,
+        lead: 59 - variant * 2, warningAt: trigger - 114 - (id % 11) });
+      obstacle('rock', center + safeSide * 32, trigger - 28, 3.3);
+      obstacle('tree', center + safeSide * 29, trigger - 19, 2.24);
+      obstacle('rock', center - safeSide * 28, trigger + 14, 2.32);
+    }
+  }
   return { id, index, trail, variant, center, entryLane: offer.lane, start, end, opening: index === 0,
-    offers: offersFor(trail, id, variant), gates, features, chute, slide };
+    offers: offersFor(trail, id, variant), gates, features, chute, glade, jumps, waves };
 }
 
 export function openingSection(seed: number, trail: Trail): Section {
@@ -183,11 +246,12 @@ export function laneAt(section: Section, x: number): Lane {
 }
 
 export function spawnPoint(section: Section, scenario: MountainScenario): WorldPosition {
-  const { start, end, center, trail, slide } = section;
+  const { start, end, center, trail } = section;
   if (scenario === 'fork') return { x: center, y: end - PREVIEW_DISTANCE - 12 };
   if (scenario === 'summit') return { x: center, y: start };
-  if (slide) return { x: center, y: slide.warningAt - 16 };
-  return { x: center, y: start + (trail === 'pine' ? 295 : 63) };
+  const wave = section.waves[0];
+  if (wave) return { x: center, y: wave.warningAt - 16 };
+  return { x: center, y: section.glade ? section.glade.y - 106 : start + (trail === 'chute' ? 82 : 63) };
 }
 
 function ease(t: number): number {
@@ -199,12 +263,18 @@ export function pathCenter(section: Section, y: number): number {
   const center = section.center - section.entryLane * LANE_SPACING *
     (1 - ease((y - section.start) / 76));
   if (section.trail !== 'chute') return center;
-  const offset = y - section.start - 52;
-  const segment = Math.max(0, Math.floor(offset / 82));
-  const first = section.chute[segment] ?? 0;
-  const next = section.chute[segment + 1] ?? 0;
+  const index = chuteSegment(section, y);
+  const first = section.chute[index]!;
+  const next = section.chute[index + 1]!;
   const exit = ease((section.end - FORK_LENGTH - y) / 94);
-  return center + (first + (next - first) * ease(offset / 82 - segment)) * exit;
+  return center + (first.x + (next.x - first.x) * ease((y - first.y) / (next.y - first.y))) * exit;
+}
+
+function chuteSegment(section: Section, y: number): number {
+  const knots = section.chute;
+  let i = 0;
+  while (i < knots.length - 2 && y > knots[i + 1]!.y) i += 1;
+  return i;
 }
 
 export function pathHalfWidth(section: Section, y: number): number {
@@ -212,9 +282,13 @@ export function pathHalfWidth(section: Section, y: number): number {
   const finish = section.end - y;
   const entry = ease((distance - 30) / 95);
   const exit = ease((finish - FORK_LENGTH) / 68);
-  const width = section.trail === 'chute'
-    ? 7.8 + (1 - Math.sin((distance - 5) / 48) ** 2) * 10
-    : MAIN_WIDTH[section.trail];
+  let width = MAIN_WIDTH[section.trail];
+  if (section.trail === 'chute') {
+    const index = chuteSegment(section, y);
+    const first = section.chute[index]!;
+    const next = section.chute[index + 1]!;
+    width = first.width + (next.width - first.width) * ease((y - first.y) / (next.y - first.y));
+  }
   return ENTRY_WIDTH + (width - ENTRY_WIDTH) * entry * exit;
 }
 
@@ -237,15 +311,17 @@ export function describeSectionCell(section: Section | null, cellX: number, cell
   if (trail === 'pine') {
     const grove = Math.sin((y - start) / 57) * Math.cos((x - center) / 14 + section.variant) +
       Math.sin((y - start) / 143 + section.variant) * 0.44;
-    const clearing = Math.abs((y - start) - (365 + section.variant * 44)) < 55;
-    if (side < 7 || (clearing && side < 25) || pick > (side > width ? 0.81 : 0.43 + grove * 0.31)) return;
+    const gladeY = section.glade!.y;
+    const signature = y > gladeY - 114 && y < gladeY + 62;
+    if (side < 7 || (signature && side < 36) || pick > (side > width ? 0.81 : 0.43 + grove * 0.31)) return;
     target.type = pick > 0.73 ? 'rock' : 'tree';
-  } else if (side > width + (trail === 'chute' ? 1 : 3) && pick < (trail === 'chute' ? 0.68 : 0.31)) {
-    target.type = trail === 'chute' || trail === 'avalanche' || pick > 0.22 ? 'rock' : 'tree';
+  } else if (side > width + (trail === 'chute' ? 3 : 4) && pick < (trail === 'chute' ? 0.94 : 0.31)) {
+    target.type = trail === 'chute' ? (side > width + 10 && pick > 0.11 ? 'tree' : 'rock')
+      : trail === 'avalanche' || pick > 0.22 ? 'rock' : 'tree';
   } else {
     return;
   }
-  const scale = trail === 'chute' ? 1.5 + hashUnit(id, cellX, cellY, 25) * 1.8
+  const scale = trail === 'chute' ? 1.45 + hashUnit(id, cellX, cellY, 25) * 1.35
     : 0.8 + hashUnit(id, cellX, cellY, 25) * (trail === 'pine' ? 0.95 : 0.56);
   target.id = hashCoordinates(id, cellX, cellY, 24);
   target.x = x;
@@ -255,12 +331,32 @@ export function describeSectionCell(section: Section | null, cellX: number, cell
   if (trail !== 'pine' && side - target.radius < width + 0.8) target.type = 'none';
 }
 
-export function slideEdge(center: number, x: number, front: number): number {
-  return front - Math.abs(x - center) * 0.32;
+export function slideEdge(wave: SlideWave, center: number, x: number, front: number): number {
+  const across = (x - center) * wave.safeSide;
+  return front - Math.max(0, across + 12) * 0.27;
 }
 
-export function inShelter(section: Section, point: Readonly<WorldPosition>): boolean {
-  const slide = section.slide;
-  return !!slide && point.y >= slide.shelterStart && point.y <= slide.shelterEnd &&
-    Math.abs(point.x - section.center) >= slide.shelterEdge;
+export function jumpAtLip(section: Section, before: Readonly<WorldPosition>, after: Readonly<WorldPosition>): boolean {
+  return section.jumps.some((jump) => before.y < jump.lip && after.y >= jump.lip &&
+    Math.abs(interpolateX(before, after, jump.lip) - jump.x) < jump.halfWidth);
+}
+
+export function hitsJumpObstacle(section: Section, point: Readonly<WorldPosition>, height: number): boolean {
+  return section.jumps.some((jump) => point.y >= jump.gapStart && point.y < jump.gapEnd &&
+    point.x > jumpGapEdge(jump, point.y, -1) && point.x < jumpGapEdge(jump, point.y, 1) &&
+    height < (jump.kind === 'crevice' ? 0.24 : jump.kind === 'rocks' ? 0.7 : 0.55));
+}
+
+const GAP_PROFILES = [
+  [-0.84, -1.03, -0.83, -1.03, -0.80],
+  [0.76, 0.94, 0.89, 1.09, 0.82],
+] as const;
+
+export function jumpGapEdge(jump: JumpLine, y: number, side: -1 | 1): number {
+  if (jump.kind !== 'crevice') return jump.x + side * jump.gapHalfWidth;
+  const profile = GAP_PROFILES[side === -1 ? 0 : 1]!;
+  const t = Math.max(0, Math.min(4, 4 * (y - jump.gapStart) / (jump.gapEnd - jump.gapStart)));
+  const i = Math.min(3, Math.floor(t));
+  const offset = profile[i]! + (profile[i + 1]! - profile[i]!) * (t - i);
+  return jump.x + offset * jump.gapHalfWidth;
 }

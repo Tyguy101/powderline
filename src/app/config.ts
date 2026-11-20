@@ -76,7 +76,9 @@ export const GAME_CONFIG: GameConfig = {
   mobileCameraMode:
     developmentMode && query.get('mobileCamera') === 'legacy' ? 'legacy' : 'landscape',
   replay: replayData ? replay : null,
-  replayError: replay !== null && !replayData ? 'This replay is invalid or from an unsupported Powderline version.' : null,
+  replayError: replay !== null && !replayData
+    ? 'This replay is invalid or uses an older mountain layout. Version 6 replays play on the original Endless Mountain branch.'
+    : null,
   mountain: classic ? null : replayData?.mountain ?? {
     trail: isTrail(requestedTrail) ? requestedTrail : 'pine',
     scenario: isScenario(requestedScenario) ? requestedScenario : 'summit',

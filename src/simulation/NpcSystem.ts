@@ -1,7 +1,8 @@
 import { hashCoordinates, hashUnit } from '../core/SeededHash';
 import type { SkiState } from './SkiPhysics';
 import { FeatureGeneratorCPU, type FeatureDescriptor, type SectionSource } from '../world/FeatureGeneratorCPU';
-import { pathCenter, pathHalfWidth } from '../world/EndlessMountain';
+import { hitsJumpObstacle, pathCenter, pathHalfWidth, PREVIEW_DISTANCE } from '../world/EndlessMountain';
+import type { MountainRun } from './MountainRun';
 
 export const MAX_NPCS = 5;
 export const NPC_COLLISION_RADIUS = 0.66;
@@ -35,6 +36,7 @@ export interface NpcState {
   recovery: number;
   airborne: number;
   collisionCooldown: number;
+  avalancheHit?: number;
 }
 
 export interface NpcPlayerContact {
@@ -214,6 +216,19 @@ export class NpcSystem {
       const offset = lookX - pathCenter(section, lookY);
       const width = pathHalfWidth(section, lookY);
       if (Math.abs(offset) > width - 5) intent = -Math.sign(offset);
+      const jump = section.jumps.find((line) => npc.y > line.lip - 90 && npc.y <= line.gapEnd);
+      if (jump) {
+        const offset = npc.x - jump.x;
+        const side = Math.abs(offset) > 1 ? Math.sign(offset) : npc.slot % 2 ? 1 : -1;
+        const target = jump.x + side * (jump.gapHalfWidth + 8);
+        intent = Math.max(-1, Math.min(1, (target - lookX) * 0.21));
+      }
+      if (lookY > section.end - PREVIEW_DISTANCE) {
+        const offset = npc.x - section.center;
+        const side = Math.abs(offset) > 0.8 ? Math.sign(offset) : npc.slot % 2 ? 1 : -1;
+        const bankLine = section.center + side * (22 + npc.variation);
+        intent = Math.max(-1, Math.min(1, (bankLine - lookX) * 0.25));
+      }
     }
     const obstacle = this.features.findCollision(lookX, lookY, 1.2, this.obstacle);
     if (obstacle?.type === 'ramp' && npc.type === 'snowboarder') {
@@ -237,6 +252,20 @@ export class NpcSystem {
     npc.velocityY += (targetSpeed - npc.velocityY) * (1 - Math.exp(-1.1 * delta));
     npc.x += npc.velocityX * delta;
     npc.y += npc.velocityY * delta;
+    if (section?.trail === 'chute') {
+      const center = pathCenter(section, npc.y);
+      const width = pathHalfWidth(section, npc.y) - NPC_COLLISION_RADIUS;
+      const clamped = Math.max(center - width, Math.min(center + width, npc.x));
+      if (clamped !== npc.x) {
+        npc.x = clamped;
+        npc.velocityX *= 0.35;
+        npc.velocityY *= 0.97;
+      }
+    }
+    if (section?.trail === 'air' && npc.collisionCooldown <= 0 &&
+      hitsJumpObstacle(section, { x: npc.x, y: npc.y }, npc.airborne)) {
+      this.hitNpc(npc, 0.85, false, npc.velocityX, npc.velocityY);
+    }
     npc.facing += (npc.carve * (typeIndex === 2 ? 0.78 : 0.55) - npc.facing) *
       (1 - Math.exp(-5 * delta));
     const carveStrength = Math.abs(npc.carve);
@@ -291,6 +320,18 @@ export class NpcSystem {
     npc.collisionCooldown = npc.fallDuration + 0.5;
   }
 
+  engulf(run: MountainRun): void {
+    if (run.front <= 0 || !run.wave) return;
+    const key = run.waveKey;
+    for (const npc of this.states) {
+      if (!npc.active || npc.avalancheHit === key || !run.engulfed(npc.x, npc.y)) continue;
+      npc.avalancheHit = key;
+      npc.airborne = 0;
+      this.hitNpc(npc, 0.94, false, npc.velocityX * 0.4, npc.velocityY);
+      run.npcEngulfments += 1;
+    }
+  }
+
   private stepFall(npc: NpcState, delta: number): void {
     npc.fallTime += delta;
     const progress = Math.min(1, npc.fallTime / npc.fallDuration);
@@ -315,6 +356,7 @@ export class NpcSystem {
   }
 
   private spawn(npc: NpcState, player: Readonly<SkiState>, initial: boolean): void {
+    npc.avalancheHit = undefined;
     const key = npc.generation + (initial ? 0 : 1);
     npc.active = npc.slot < Math.min(3, this.populationLimit) ||
       (npc.slot < this.populationLimit && hashUnit(this.seed, npc.slot, key, 20) > 0.32);
@@ -328,6 +370,9 @@ export class NpcSystem {
       const center = pathCenter(section, npc.y);
       const width = pathHalfWidth(section, npc.y);
       npc.x = center + side * width * (0.54 + hashUnit(this.seed, npc.slot, key, 24) * 0.31);
+      if (npc.y > section.end - PREVIEW_DISTANCE) {
+        npc.x = section.center + Math.sign(side || 1) * (22 + npc.variation);
+      }
     }
     npc.velocityX = 0;
     npc.velocityY = npc.type === 'speed-skier' ? 27 : npc.type === 'beginner-skier' ? 9 : 19;

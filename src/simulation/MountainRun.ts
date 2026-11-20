@@ -1,6 +1,6 @@
 import type { WorldPosition } from '../core/WorldCoordinates';
 import {
-  inShelter, interpolateX, laneAt, openingSection, slideEdge, spawnPoint, takeRoute,
+  interpolateX, laneAt, openingSection, slideEdge, spawnPoint, takeRoute,
   WORLD_LOOK_BEHIND, type Lane, type MountainStart, type Section,
 } from '../world/EndlessMountain';
 
@@ -17,6 +17,9 @@ export class MountainRun {
   cleanGates = 0;
   avalanche: AvalancheState = 'quiet';
   front = 0;
+  waveIndex = 0;
+  wavesCleared = 0;
+  npcEngulfments = 0;
   private checkpointGates = 0;
 
   constructor(readonly seed: number, readonly start: MountainStart) {
@@ -27,6 +30,22 @@ export class MountainRun {
     return spawnPoint(this.section, this.start.scenario);
   }
 
+  get wave() {
+    return this.section.waves[this.waveIndex];
+  }
+
+  get waveKey(): number {
+    return this.section.index * 8 + this.waveIndex;
+  }
+
+  engulfed(x: number, y: number): boolean {
+    const wave = this.wave;
+    if (!wave || (this.avalanche !== 'chasing' && this.avalanche !== 'caught' &&
+      this.avalanche !== 'escaped')) return false;
+    const depth = slideEdge(wave, this.section.center, x, this.front) - y;
+    return (x - this.section.center) * wave.safeSide < wave.safeEdge && depth >= 0 && depth <= 45;
+  }
+
   retry(): void {
     this.gateIndex = 0;
     this.gateStreak = 0;
@@ -34,6 +53,9 @@ export class MountainRun {
     this.cleanGates = this.checkpointGates;
     this.avalanche = 'quiet';
     this.front = 0;
+    this.waveIndex = 0;
+    this.wavesCleared = 0;
+    this.npcEngulfments = 0;
   }
 
   sectionAt(y: number): Section | null {
@@ -57,25 +79,7 @@ export class MountainRun {
       }
       this.gateIndex += 1;
     }
-    const slide = section.slide;
-    if (slide) {
-      if (this.avalanche === 'quiet' && after.y >= slide.warningAt) this.avalanche = 'warning';
-      if (this.avalanche === 'warning' && after.y >= slide.trigger) {
-        this.avalanche = 'chasing';
-        this.front = slide.trigger - slide.lead;
-      }
-      if (this.avalanche === 'escaped' && this.front < slide.shelterEnd + 80) this.front += slide.speed * delta;
-      if (this.avalanche === 'chasing') {
-        this.front += slide.speed * delta;
-        // Once inside the marked lee, the skier is clear for this encounter.
-        if (inShelter(section, after)) this.avalanche = 'escaped';
-        else if (Math.abs(after.x - section.center) < slide.shelterEdge &&
-          slideEdge(section.center, after.x, this.front) >= after.y) {
-          this.avalanche = 'caught';
-          return 'caught';
-        }
-      }
-    }
+    if (this.advanceSlide(after, delta)) return 'caught';
     if (after.y < section.end) return;
     this.lastLane = laneAt(section, interpolateX(before, after, section.end));
     this.previous = section;
@@ -84,5 +88,47 @@ export class MountainRun {
     this.retry();
     this.revision += 1;
     return 'transition';
+  }
+
+  driftAfterCrash(delta: number): void {
+    if (this.avalanche !== 'caught' || !this.wave) return;
+    // Let the snow roll over the fallen skier, then leave the wreck in view.
+    this.front = Math.min(this.front + this.wave.speed * delta * 0.32, this.caughtFront + 23);
+  }
+
+  private caughtFront = 0;
+
+  private advanceSlide(position: Readonly<WorldPosition>, delta: number): boolean {
+    let wave = this.wave;
+    if (!wave) return false;
+    if (this.avalanche === 'escaped') {
+      const next = this.section.waves[this.waveIndex + 1];
+      if (!next || position.y < next.warningAt) {
+        if (this.front < position.y + 160) this.front += wave.speed * delta;
+        return false;
+      }
+      this.waveIndex += 1;
+      this.front = 0;
+      this.avalanche = 'quiet';
+      wave = next;
+    }
+    if (this.avalanche === 'quiet' && position.y >= wave.warningAt) this.avalanche = 'warning';
+    if (this.avalanche === 'warning' && position.y >= wave.trigger) {
+      this.avalanche = 'chasing';
+      this.front = wave.trigger - wave.lead;
+    }
+    if (this.avalanche !== 'chasing') return false;
+    this.front += wave.speed * delta;
+    if (this.engulfed(position.x, position.y)) {
+      this.avalanche = 'caught';
+      this.caughtFront = this.front;
+      return true;
+    }
+    if (this.front >= position.y + 9 &&
+      (position.x - this.section.center) * wave.safeSide >= wave.safeEdge) {
+      this.wavesCleared += 1;
+      this.avalanche = 'escaped';
+    }
+    return false;
   }
 }

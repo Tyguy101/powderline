@@ -1,58 +1,97 @@
 import type { SkiState } from '../simulation/SkiPhysics';
 import type { MountainRun } from '../simulation/MountainRun';
-import { PREVIEW_DISTANCE, TRAILS, laneAt, type Trail } from '../world/EndlessMountain';
+import {
+  FORK_BANNER_OFFSET, FORK_COLORS, FORK_ENTRANCE_OFFSET, FORK_GUIDE_OFFSET, LANE_SPACING,
+  TRAILS, type Section,
+} from '../world/EndlessMountain';
 
-const VARIANTS: Record<Trail, readonly string[]> = {
-  pine: ['Open groves and long sightlines', 'Tighter groves with a late clearing', 'Long gaps between thicker stands'],
-  gate: ['Wide slalom rhythm', 'Quicker turns between gates', 'Tighter alternating gates'],
-  air: ['Short traverses between jump lines', 'Wide gap to the side kickers', 'Longest traverse to the big kickers'],
-  chute: ['Smoother turns between rock walls', 'Wider swings through the pinch points', 'Sharpest turns through the rock'],
-  avalanche: ['Two shelters and a longer warning', 'Faster snow with two side exits', 'Quickest front and deepest traverse'],
-};
+interface MountainView { x: number; y: number; width: number; height: number }
+
+class TrailSigns {
+  readonly root = document.createElement('section');
+  private readonly banner = document.createElement('div');
+  private readonly guide: HTMLElement[] = [];
+  private readonly mouths: HTMLElement[] = [];
+  private sectionId = -1;
+
+  constructor(host: HTMLElement) {
+    this.root.className = 'trail-signs';
+    this.root.setAttribute('aria-label', 'Trail signs');
+    this.banner.className = 'trail-sign trail-instruction';
+    this.banner.textContent = 'Choose your next trail';
+    this.root.append(this.banner);
+    for (const row of [this.guide, this.mouths]) {
+      for (const [index, arrow] of ['↙', '↓', '↘'].entries()) {
+        const board = document.createElement('div');
+        board.className = 'trail-sign trail-destination';
+        board.style.setProperty('--paint', FORK_COLORS[index]!);
+        if (index === 1) board.classList.add('trail-destination--yellow');
+        const direction = document.createElement('i');
+        direction.textContent = arrow;
+        const name = document.createElement('strong');
+        board.append(direction, name);
+        this.root.append(board);
+        row.push(board);
+      }
+    }
+    host.append(this.root);
+  }
+
+  update(section: Section | null, view: MountainView): void {
+    this.root.hidden = !section || Math.abs(section.end - view.y) > view.height / 2 + FORK_BANNER_OFFSET + 8;
+    if (this.root.hidden || !section) return;
+    if (section.id !== this.sectionId) {
+      this.sectionId = section.id;
+      for (const [index, offer] of section.offers.entries()) {
+        const name = TRAILS[offer.trail].name;
+        this.guide[index]!.querySelector('strong')!.textContent = name;
+        this.mouths[index]!.querySelector('strong')!.textContent = name;
+      }
+    }
+    this.place(this.banner, section.center, section.end - FORK_BANNER_OFFSET, 33, view);
+    for (let i = 0; i < 3; i += 1) {
+      const x = section.center + (i - 1) * LANE_SPACING;
+      this.place(this.guide[i]!, x, section.end - FORK_GUIDE_OFFSET, 16.7, view);
+      this.place(this.mouths[i]!, x, section.end - FORK_ENTRANCE_OFFSET, 16.7, view);
+    }
+  }
+
+  private place(board: HTMLElement, x: number, y: number, width: number, view: MountainView): void {
+    const row = (y - view.y) / view.height + 0.5;
+    const column = (x - view.x) / view.width + 0.5;
+    board.hidden = row < -0.1 || row > 1.09 || column < -0.25 || column > 1.25;
+    if (board.hidden) return;
+    board.style.transform = `translate3d(${column * 100}vw, ${row * 100}dvh, 0) translate(-50%, -77%)`;
+    const projectedWidth = `${width / view.width * 100}%`;
+    if (board.style.width !== projectedWidth) board.style.width = projectedWidth;
+  }
+}
 
 export class MountainHUD {
-  private readonly root: HTMLElement;
   private readonly trail: HTMLElement;
   private readonly line: HTMLElement;
   private readonly seed: HTMLButtonElement;
-  private readonly fork: HTMLElement;
-  private readonly forkDistance: HTMLElement;
-  private readonly choices: HTMLElement[];
   private readonly notice: HTMLElement;
-  private readonly outcomes = {
-    quiet: '',
-    warning: 'Avalanche warning · move toward either side',
-    chasing: 'Avalanche! Reach a green shelter lane',
-    escaped: 'Sheltered · keep skiing',
-    caught: 'Avalanche caught you',
-  };
+  private readonly signs: TrailSigns;
+  private readonly previousSigns: TrailSigns;
   private section = -1;
 
-  constructor(host: HTMLElement, private readonly run: MountainRun) {
-    this.root = document.createElement('div');
-    this.root.className = 'mountain-ui';
-    this.root.innerHTML = `
+  constructor(host: HTMLElement, private readonly run: MountainRun, private readonly view: MountainView) {
+    const root = document.createElement('div');
+    root.className = 'mountain-ui';
+    root.innerHTML = `
       <section class="mountain-trail" aria-label="Current trail">
         <div><i></i><strong></strong></div><small></small>
         <button type="button" data-seed title="Copy a link to this descent">Seed <span></span></button>
       </section>
-      <div class="mountain-notice" role="status" hidden></div>
-      <section class="mountain-fork" aria-label="Upcoming trail choices" hidden>
-        <header><b>Trail fork</b><span></span></header>
-        <div class="mountain-choices">
-          <div><small>↙ Left</small><strong></strong><b></b><span></span></div>
-          <div><small>↓ Straight</small><strong></strong><b></b><span></span></div>
-          <div><small>↘ Right</small><strong></strong><b></b><span></span></div>
-        </div>
-      </section>`;
-    host.append(this.root);
-    this.trail = this.root.querySelector('.mountain-trail')!;
+      <div class="mountain-notice" role="status" hidden></div>`;
+    this.previousSigns = new TrailSigns(root);
+    this.signs = new TrailSigns(root);
+    host.append(root);
+    this.trail = root.querySelector('.mountain-trail')!;
     this.line = this.trail.querySelector('small')!;
     this.seed = this.trail.querySelector('button')!;
-    this.fork = this.root.querySelector('.mountain-fork')!;
-    this.forkDistance = this.fork.querySelector('header span')!;
-    this.choices = [...this.fork.querySelectorAll<HTMLElement>('.mountain-choices > div')];
-    this.notice = this.root.querySelector('.mountain-notice')!;
+    this.notice = root.querySelector('.mountain-notice')!;
     this.seed.addEventListener('click', async () => {
       const { trail, scenario } = this.run.start;
       const url = new URL(location.pathname, location.origin);
@@ -69,45 +108,27 @@ export class MountainHUD {
   }
 
   update(state: Readonly<SkiState>): void {
-    const { section, avalanche, gateIndex, gateStreak, gateOutcome } = this.run;
-    const distance = Math.max(0, Math.ceil(section.end - state.position.y));
+    const { section, avalanche, gateIndex, gateStreak, gateOutcome, wave, wavesCleared } = this.run;
+    this.signs.update(section, this.view);
+    this.previousSigns.update(this.run.previous, this.view);
+    const trail = TRAILS[section.trail];
     if (this.section !== section.id) {
       this.section = section.id;
-      const trail = TRAILS[section.trail];
       this.trail.querySelector('strong')!.textContent = trail.name;
       this.trail.style.setProperty('--trail-color', trail.color);
       this.seed.textContent = `Seed ${this.run.seed}`;
-      for (const offer of section.offers) {
-        const choice = this.choices[offer.lane + 1]!;
-        const target = TRAILS[offer.trail];
-        choice.style.setProperty('--trail-color', target.color);
-        choice.querySelector('strong')!.textContent = target.name;
-        choice.querySelector('b')!.textContent = target.difficulty;
-        choice.querySelector('span')!.textContent = VARIANTS[offer.trail][offer.variant]!;
-      }
     }
-    const trail = TRAILS[section.trail];
     const nextGate = section.gates[gateIndex];
-    const gateDirection = nextGate && nextGate.x < section.center ? 'left' : 'right';
-    const info = nextGate
-      ? `Streak ${gateStreak} · ${gateOutcome === 'missed' ? 'Missed · ' : ''}Gate ${gateDirection} in ${Math.max(0, Math.ceil(nextGate.y - state.position.y))} m`
+    const info = nextGate ? `Streak ${gateStreak} · ${gateOutcome === 'missed' ? 'Missed · ' : ''}Gate in ${Math.max(0, Math.ceil(nextGate.y - state.position.y))} m`
       : `${trail.difficulty} · ${trail.cue}`;
     if (this.line.textContent !== info) this.line.textContent = info;
-    const notice = this.outcomes[avalanche];
-    this.notice.hidden = !notice || state.crashed || (avalanche === 'escaped' && state.position.y > (section.slide?.shelterEnd ?? 0));
-    if (this.notice.textContent !== notice) {
-      this.notice.textContent = notice;
-      this.notice.dataset.state = avalanche;
-    }
-    const showFork = !state.crashed && distance <= PREVIEW_DISTANCE;
-    this.fork.hidden = !showFork;
-    if (!showFork) return;
-    this.fork.classList.toggle('mountain-fork--close', distance <= 64);
-    const label = `Steer to choose · ${distance} m`;
-    if (label !== this.forkDistance.textContent) this.forkDistance.textContent = label;
-    const lane = laneAt(section, state.position.x);
-    for (const [i, choice] of this.choices.entries()) {
-      choice.classList.toggle('selected', distance <= 58 && lane + 1 === i);
-    }
+    const direction = wave?.safeSide === -1 ? 'left' : 'right';
+    const notice = avalanche === 'warning' ? `Snow shifting · cross ${direction}` :
+      avalanche === 'chasing' ? `Avalanche · stay ${direction} of the crossing flags` :
+      avalanche === 'escaped' && wavesCleared === section.waves.length ? 'Clear of the slide path' : '';
+    this.notice.hidden = !notice || state.crashed ||
+      (avalanche === 'escaped' && state.position.y > (wave?.trigger ?? 0) + 180);
+    if (this.notice.textContent !== notice) this.notice.textContent = notice;
+    this.notice.dataset.state = avalanche;
   }
 }
