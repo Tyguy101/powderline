@@ -19,6 +19,7 @@ const maxCanvasPixels = argument('maxCanvasPixels', '');
 const scenario = argument('scenario', disable ? `without-${disable.replaceAll(',', '-')}` : 'normal');
 const browserName = argument('browser', 'chrome');
 const backend = argument('backend', 'default');
+const seed = argument('seed', '424242');
 const section = argument('section', '');
 const start = argument('start', '');
 const drive = argument('drive', 'carves');
@@ -106,7 +107,7 @@ try {
     if (message.type() === 'error') errors.push(message.text());
   });
   page.on('pageerror', (error) => errors.push(error.message));
-  const query = new URLSearchParams({ seed: '424242', quality });
+  const query = new URLSearchParams({ seed, quality });
   if (section) query.set('section', section);
   if (start) query.set('scenario', start);
   if (disable) query.set('disable', disable);
@@ -117,10 +118,15 @@ try {
   if (drive === 'tuck') await page.keyboard.down('KeyS');
   await page.waitForTimeout(warmupSeconds * 1000);
   if (avalanche) {
-    await page.waitForFunction(({ phase, maxLead }) => {
-      const metrics = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
-      return metrics?.avalanche === phase && metrics.worldY - metrics.avalancheFront <= maxLead;
-    }, { phase: avalanche, maxLead: lead }, { timeout: 25_000 });
+    try {
+      await page.waitForFunction(({ phase, maxLead }) => {
+        const metrics = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+        return metrics?.avalanche === phase && metrics.worldY - metrics.avalancheFront <= maxLead;
+      }, { phase: avalanche, maxLead: lead }, { timeout: 25_000 });
+    } catch (cause) {
+      const current = await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__'));
+      throw new Error(`Avalanche benchmark did not reach the requested window: ${JSON.stringify(current)}`, { cause });
+    }
   }
   await page.evaluate(`(() => {
     const samples = [];
@@ -166,7 +172,7 @@ try {
     quality,
     browser: browserName,
     backend,
-    route: { section, start, drive, avalanche, lead: Number.isFinite(lead) ? lead : null },
+    route: { seed, section, start, drive, avalanche, lead: Number.isFinite(lead) ? lead : null },
     durationSeconds,
     viewport: { width, height, dpr },
     canvas: { ...pageData.canvas, pixels: canvasPixels },

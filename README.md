@@ -1,7 +1,7 @@
 # Powderline
 
-Powderline is an original browser skiing game: a deterministic downhill run
-through a procedurally generated mountain, rendered with WebGPU and Three.js
+Powderline is an original browser skiing game with a seeded, branching endless
+descent through a procedural mountain, rendered with WebGPU and Three.js
 TSL. It is moving from prototype toward a feature-complete web game, a polished
 release candidate, physical-device testing, and eventual mobile/native packaging
 investigation. This repository is the technical source of truth for the game.
@@ -60,7 +60,20 @@ npm run dev:https
 The generated certificate is self-signed and must be trusted on each test
 device. Production is served over trusted HTTPS.
 
-Use `?seed=424242`, `?quality=potato`, or `?debug=1` to configure a run.
+Use `npm run dev -- --host 127.0.0.1` for loopback-only play. A new descent
+starts in Pine Glades with a random seed. Click the seed in the HUD to copy a
+link to its starting layout, or specify one with `?seed=1729`.
+
+For seed 1729, take **left → left → right → left → right** to ski Pine Glades,
+Gate Run, Big Air Park, Needle Chute, Avalanche Alley, and then return to Gate
+Run. The fork previews the choices before you reach the colored flags. Steer
+through a lane to choose it. After a crash, **Retry Section** restores the latest
+section entrance and **Restart at the Top** starts a fresh Pine Glades descent.
+
+Targeted local checks support `?seed=1729&section=chute&scenario=encounter` and
+`?seed=1729&section=pine&scenario=fork`. Section IDs are `pine`, `gate`, `air`,
+`chute`, and `avalanche`. The start scenarios are `summit`, `encounter`, and
+`fork`. Use `?quality=potato` for the reduced preset and `?debug=1` for F3 metrics.
 
 ## Production
 
@@ -87,7 +100,7 @@ the address to share.
   horizontally for analog carving; vertical thumb drift does not change speed
 - Touch: hold the right-side `BRAKE` or `TUCK` control while steering with the
   left thumb; releasing the button returns to neutral speed input
-- `R`: restart after a crash
+- `R`: retry the current section after a crash
 - `P` / Escape: pause or resume
 - Enter / Space: menu confirmation
 - Controller left stick: analog steering; up brakes and down tucks
@@ -118,6 +131,8 @@ npm run benchmark:potato
 npm run benchmark:mobile
 npm run benchmark:matrix
 npm run qa:mobile
+npm run qa:endless
+npm run qa:endless -- --tour
 npm run report
 ```
 
@@ -132,7 +147,7 @@ in [BENCHMARKING.md](./BENCHMARKING.md).
 
 ## Status
 
-The default production build currently includes:
+This checkout includes:
 
 - WebGPU and Three.js TSL rendering with no imported game art
 - A shader-drawn skier with interpolated neutral, carve, traverse, brake, tuck,
@@ -198,11 +213,8 @@ The sequence is:
 5. beta/TestFlight preparation;
 6. App Store submission.
 
-The next product milestone is the menu/app shell. Other work remains tracked in
-Linear rather than duplicated here. Known
-future areas include progressive mountain difficulty, additional hazards,
-scoring/run structure, audio, onboarding, mobile UX, accessibility, and release
-QA. The Web → iOS packaging investigation must test WebGPU/WebKit behavior,
+See [ROADMAP.md](./ROADMAP.md) for the next run and trail milestones. The
+Web → iOS packaging investigation must test WebGPU/WebKit behavior,
 controllers, touch, lifecycle, orientation, audio, safe areas, storage,
 performance, and App Store rules before a wrapper technology is chosen.
 

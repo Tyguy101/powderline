@@ -20,6 +20,14 @@ enabled, opens a fixed seed and quality preset, plays a fixed input sequence,
 records runtime metrics and browser errors, verifies canvas visibility, and saves
 a named screenshot plus JSON.
 
+Endless Mountain can target an authored encounter or fork while using the
+same production preview and frame sampler. `--section` selects a trail and
+`--start=fork` or `--start=encounter` selects its approach. `--drive=tuck` holds
+the regular tuck key. To sample the moving avalanche during its visible chase,
+use `--seed=1729 --section=avalanche --start=encounter --drive=tuck --avalanche=chasing
+--lead=26 --duration=4`. The sampler waits until the phase and lead criteria
+are satisfied before counting frames.
+
 `npm run report` converts the latest JSON result into Markdown. Potato and mobile
 scripts select fixed viewport and quality combinations. Generated PNG and report
 files are development diagnostics and are not committed as game assets.

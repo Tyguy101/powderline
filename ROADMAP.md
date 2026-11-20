@@ -1,11 +1,15 @@
 # Roadmap
 
-1. Add deterministic procedural trees and rocks with CPU circle collision,
-   crash/restart, and replay serialization.
-2. Implement a four-level toroidal clipmap and streaming instrumentation.
-3. Move compact feature descriptor generation to compute while retaining a CPU
-   Level 0 gameplay mirror.
-4. Add tracks, particles, ramps, surfaces, landing, gates, and near misses.
-5. Add adaptive quality, dynamic resolution, mobile profiling, and a WebGL 2
-   feasibility report.
-6. Expand zones and game systems only after the first four milestones are stable.
+1. **Endless Mountain.** Validate the five-section local descent, physical
+   forks, retries, shareable seeds, and deterministic encounter playback.
+2. **Meaningful runs.** Refine route previews and difficulty progression.
+   Explore a run journal, route history, personal bests, seed sharing, and
+   optional route challenges.
+3. **More terrain.** Explore Sun Bowl, Roller Field, and Old Lift Line (Normal).
+   Difficult candidates are Mogul Gully, Wind Traverse, and Patrol Road.
+   Extreme candidates are Black Ice Run and Cornice Ridge. Dangerous
+   candidates are Falling Ice and Cracking Lake.
+4. **Polish and playtest.** Tune atmosphere, cues, accessibility, onboarding,
+   input feel, and performance on physical desktop and mobile devices.
+5. **Distribution.** Revisit public hosting, downloadable HTML, and native
+   packaging when requested.

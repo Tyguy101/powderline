@@ -1,6 +1,146 @@
 # Powderline QA handoff
 
-## Current milestone
+## Endless Mountain local playtest
+
+- Checkout `C:\Users\tyler\Powderline` on `codex/endless-mountain`, based on
+  `80600c920645707029b3c4bfbd201d88c4789c47`.
+- Implementation commit `ba9922eff433abf3c26889667447aecdb31c1459` and
+  mobile readability follow-up `9d8597a`. The branch tip includes the QA handoff.
+- Launch `npm run dev -- --host 127.0.0.1` and open [the seeded summit](http://localhost:5173/?seed=1729).
+- Seed **1729**. Take **left → left → right → left → right** to visit every
+  trail and return to Gate Run. Go straight at the next fork to replay the
+  trail type with a new layout. Seed **424242** offers Needle Chute before Big
+  Air Park, and seed **2718** offers a different set of section rhythms.
+
+| Check | Start link |
+| --- | --- |
+| Pine Glades summit | [Open summit](http://localhost:5173/?seed=1729) |
+| Route preview and steering | [Approach Pine fork](http://localhost:5173/?seed=1729&section=pine&scenario=fork) |
+| Gate Run | [Approach first gate](http://localhost:5173/?seed=1729&section=gate&scenario=encounter) |
+| Big Air Park | [Approach first kicker](http://localhost:5173/?seed=1729&section=air&scenario=encounter) |
+| Needle Chute | [Approach first bend](http://localhost:5173/?seed=1729&section=chute&scenario=encounter) |
+| Avalanche Alley | [Approach warning zone](http://localhost:5173/?seed=1729&section=avalanche&scenario=encounter) |
+
+- Gate Run counts crossings between flags. Brake to set up a turn or coast
+  through the rhythm. On Big Air, tuck toward the first center kicker or carve
+  wide early to pass it. In Needle Chute, brake before the narrow rock bends.
+  In Avalanche Alley, head into either green shelter lane after the warning.
+  A centered coast reproduces the catch.
+- **Retry Section** or **R** restores the section entrance with its incoming
+  speed, NPCs, and score at commitment. A QA start retries at the selected QA
+  spawn. **Restart at the Top** starts a fresh Pine Glades seed. The seed chip
+  copies a starting URL. A crash replay includes the inputs and starting
+  settings. Valid v5 recordings select the classic course and should use their
+  original quality preset.
+- **F3** and `globalThis.__POWDERLINE_METRICS__` expose trail ID, fork lanes,
+  score and streak, shelter state, frame pacing, and canvas budget.
+  `?dev=1` enables the read-only `__POWDERLINE_REPLAY__()` capture hook.
+  Telemetry initialization is skipped on loopback.
+
+### Repeatable evidence
+
+```powershell
+npm run lint
+npm test
+npm run build
+npm run qa:endless -- --headed
+npm run qa:endless -- --tour
+npm run qa:endless -- --replay-tour
+npx tsx tools/qa/endless-tuning.ts
+npm run benchmark -- --duration=5 --warmup=3 --scenario=endless-smoke
+npm run benchmark:potato -- --duration=5 --warmup=3 --scenario=endless-potato
+npm run benchmark -- --section=pine --start=fork --duration=5 --scenario=endless-junction
+npm run benchmark -- --seed=1729 --section=avalanche --start=encounter --drive=tuck --avalanche=chasing --lead=26 --duration=4 --scenario=endless-chase
+npm run benchmark:matrix
+npm run qa:mobile
+```
+
+The browser tour uses real mouse drag input from the summit and drives
+representative left, right, and straight forks. The focused browser script
+uses drag, keyboard, and crash buttons. Both write screenshots, metrics,
+and captured replay strings under `tools/reports/endless`. To play a saved
+replay, append the contents of its `.replay.txt` file to
+`http://localhost:5173/#replay=`. The fragment keeps long recordings in the
+browser. The `--replay-tour` check replays the saved tour at accelerated
+fixed-step time. Duration and steering variants are generated
+locally by the fixed-step sweep. The rendered captures were reviewed in Codex.
+
+- **Headless Chrome summit tour.** Playwright drag drove 9.45 km through
+  six forks with zero browser errors and 58 clean gates. The 50 KB input
+  replay reached the same seventh-section identity and score on the potato
+  render preset at accelerated fixed-step time. Use `tour.json`,
+  `tour-5-commit.replay.txt`, and `replay-tour.json`.
+- **Headed Chrome encounters.** Playwright drove the right fork, tested a
+  clean gate and a miss, landed a 47.6 m tucked jump, bypassed the park
+  kickers, and reproduced early/late escapes and a catch. Both crash actions,
+  the v5 classic replay, and invalid-replay messaging passed. Use
+  `encounters.json` and the paired PNG and replay captures.
+- **Long-run bounds.** The tour retained two sections, up to 384 trail
+  samples, and 1,072 compressed input runs at the final fork. After startup,
+  recorded stage snapshots had 16.7 ms medians and 16.8–17.0 ms P95s.
+  Chrome process private memory stayed between 556 and 577 MiB over the
+  final 85 seconds. JS heap ended at about 27 MiB. Process memory snapshots
+  include Chrome overhead. The fixed-step unit ride advanced over 60 sections
+  and reached the recording capacity without stopping the descent.
+- **Automated tests.** 41 passed across 11 files. The generator batch checked
+  route reachability and joins across 256 seeds. Focused batches checked
+  steering and collision geometry across the three variants of each encounter.
+- **Mobile emulation.** Four Chromium profiles passed in both orientations,
+  including the unsupported-WebGPU message, lifecycle pause and resume,
+  split touch controls, and fork layout. The compact fork preview was
+  captured on the narrow landscape profile. See
+  [mobile results](../tools/reports/mobile-lifecycle/results.json) and
+  [close fork](../tools/reports/mobile-lifecycle/narrow-landscape-fork-close.png).
+
+The 12-seed sweep cleared 12/12 of the first gates while braking, 11–12/12
+while coasting, and 1–3/12 while tucking. Seed 1729's first jump traveled
+6.65 m braking, 27.89 m coasting, and 47.62 m tucked. All 12 coasting
+avalanche trials escaped at the warning or when starting a traverse at a
+36–52 m lead. All 12 were caught when starting at 28 m or making no move.
+
+### Captures
+
+| Scene | Screenshot |
+| --- | --- |
+| Summit | [Start deck](../tools/reports/endless/tour-summit.png) |
+| Pine Glades | [Clearing landmark](../tools/reports/endless/pine-clearing.png) |
+| Gate Run | [Clean gate](../tools/reports/endless/gate-clean.png) |
+| Big Air Park | [Landing](../tools/reports/endless/air-landing.png) |
+| Needle Chute | [Rock pinch point](../tools/reports/endless/tour-chute.png) |
+| Avalanche Alley | [Late escape](../tools/reports/endless/avalanche-late.png) |
+| Junction | [Approach](../tools/reports/endless/tour-1-fork-approach.png) and [commit](../tools/reports/endless/tour-1-commit.png) |
+
+### Production preview performance
+
+Same-machine headless Chrome 157 with the default WebGPU backend on Windows.
+The desktop and potato before/after runs used identical scripts, DPR 1,
+viewports, and quality settings.
+
+| Profile | Canvas pixels | Median / P95 / P99 | Frames >50 ms |
+| --- | ---: | --- | ---: |
+| Original desktop, 1440×900 | 998,560 | 16.70 / 16.90 / 17.00 ms | 0 |
+| Mountain desktop, 1440×900 | 998,560 | 16.70 / 16.90 / 17.00 ms | 0 |
+| Original potato, 1280×720 | 921,600 | 16.70 / 17.00 / 17.00 ms | 0 |
+| Mountain potato, 1280×720 | 921,600 | 16.70 / 16.90 / 17.00 ms | 0 |
+| Mountain junction | 998,560 | 16.70 / 16.90 / 17.00 ms | 0 |
+| Mountain moving avalanche, seed 1729 | 998,560 | 16.70 / 16.90 / 17.00 ms | 0 |
+
+Desktop smoke CPU averages moved from 0.167 to 0.197 ms for simulation,
+0.05 to 0.07 ms for render preparation, and 0.735 to 0.919 ms for CPU
+submission. Frame pacing stayed within the same refresh interval.
+All eight matrix profiles passed on `9d8597a8`. They measured 16.70 ms
+median, 16.90 ms P95, 17.00 ms P99, and zero frames over 50 ms. The
+four-second tuck chase remained active throughout. It averaged 0.131 ms
+in simulation, 0.008 ms in collision, 0.046 ms in render preparation,
+and 0.731 ms in CPU submission.
+
+**Playtest decisions.** Compare the feel of the late escape with the early
+green exit. Then try coasting through Gate Run before braking at its tighter
+turns. Physical-device compatibility and human play feel remain the next checks.
+
+---
+
+## Previous milestone
 
 Landscape mobile physical-playability experiment. This iteration tests a camera
 composition designed for landscape and independent two-thumb controls. It does
