@@ -102,6 +102,7 @@ export class MountainHUD {
     const showFork = !state.crashed && distance <= PREVIEW_DISTANCE;
     this.fork.hidden = !showFork;
     if (!showFork) return;
+    this.fork.classList.toggle('mountain-fork--close', distance <= 64);
     const label = `Steer to choose · ${distance} m`;
     if (label !== this.forkDistance.textContent) this.forkDistance.textContent = label;
     const lane = laneAt(section, state.position.x);

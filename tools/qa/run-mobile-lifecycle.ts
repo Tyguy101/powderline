@@ -356,6 +356,10 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
     const preview = await fork.boundingBox();
     const brake = await page.locator('.touch-action--brake').boundingBox();
     const tuck = await page.locator('.touch-action--tuck').boundingBox();
+    const trail = await page.getByRole('region', { name: 'Current trail' }).boundingBox();
+    const pause = await page.locator('.mobile-pause').boundingBox();
+    assert(trail && pause && trail.x >= pause.x + pause.width,
+      `${profile.name}: current trail sits under pause in ${label} orientation.`);
     assert(preview && preview.x >= 0 && preview.y >= 0 &&
       preview.x + preview.width <= viewport.width + 1 && preview.y + preview.height <= viewport.height + 1,
     `${profile.name}: trail preview is clipped in ${label} orientation.`);
@@ -367,6 +371,13 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
     }
     forkLayouts.push({ label, viewport, preview });
     await page.screenshot({ path: path.join(reportDirectory, `${profile.name}-fork-${label}.png`) });
+  }
+  if (profile.name === 'narrow-landscape') {
+    await page.setViewportSize(profile.viewport);
+    await page.locator('.mountain-fork--close').waitFor({ state: 'visible' });
+    assert(!await fork.locator('.mountain-choices span').first().isVisible(),
+      'Compact trail preview obscures the approach.');
+    await page.screenshot({ path: path.join(reportDirectory, 'narrow-landscape-fork-close.png') });
   }
   assert(errors.length === 0, `${profile.name}: browser errors: ${errors.join(' | ')}`);
   await context.close();
@@ -393,8 +404,8 @@ async function verifyUnsupportedWebGpu(browser: Browser): Promise<void> {
   await card.waitFor({ state: 'visible' });
   assert((await card.textContent())?.includes('does not currently expose WebGPU'),
     'Unsupported-WebGPU path did not provide useful player guidance.');
-  assert(await page.evaluate(() => getComputedStyle(document.body).opacity === '1'),
-    'Unsupported-WebGPU message is present but invisible.');
+  await page.waitForFunction(() => getComputedStyle(document.body).opacity === '1',
+    undefined, { timeout: 5000 });
   await context.close();
 }
 

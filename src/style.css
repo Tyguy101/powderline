@@ -183,6 +183,7 @@ button, kbd { font: inherit; }
 
 @media (max-width: 900px), (pointer: coarse) {
   .mountain-fork { top: auto; bottom: max(13px, var(--safe-bottom)); width: min(470px, calc(100vw - 26px)); }
+  .mountain-fork--close .mountain-choices span { display: none; }
   #app:has(.mountain-fork:not([hidden])) .hint { visibility: hidden; }
 }
 @media (max-width: 700px), (pointer: coarse) {
@@ -191,8 +192,11 @@ button, kbd { font: inherit; }
   .mountain-trail small { font-size: 10px; }
   .mountain-notice { top: auto; bottom: max(55px, calc(var(--safe-bottom) + 38px)); }
 }
+@media (pointer: coarse) {
+  .mountain-trail { left: max(96px, calc(var(--safe-left) + 87px)); }
+}
 @media (pointer: coarse) and (orientation: landscape) {
-  .mountain-trail { left: max(77px, calc(var(--safe-left) + 70px)); top: max(58px, calc(var(--safe-top) + 45px)); }
+  .mountain-trail { top: max(58px, calc(var(--safe-top) + 45px)); }
   .mountain-trail small { max-width: 150px; }
   .mountain-fork { width: min(400px, 60vw); }
 }

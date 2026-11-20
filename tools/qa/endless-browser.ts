@@ -251,6 +251,12 @@ async function report(page: Page, completed: boolean) {
 
 async function replayTour() {
   const recording = (await readFile(path.join(output, 'tour-5-commit.replay.txt'), 'utf8')).trim();
+  const tourReport = JSON.parse(await readFile(path.join(output, 'tour.json'), 'utf8')) as {
+    completed: boolean;
+    evidence: Metrics[];
+  };
+  const expected = tourReport.evidence.find((snapshot) => snapshot.name === 'tour-5-commit');
+  assert.ok(tourReport.completed && expected, 'Run the complete tour before its replay check.');
   assert.ok(recording.length > 16_384, 'Full descent recording should exceed the server request limit.');
   await page.addInitScript(() => {
     const raf = requestAnimationFrame.bind(window);
@@ -263,10 +269,9 @@ async function replayTour() {
   await page.goto(`${base}/?quality=potato&dev=1#replay=${recording}`);
   const final = await waitForMetrics((m) => m.crashed === 'true' || m.sectionIndex === 6, 130_000);
   assert.equal(final.crashed, 'false');
-  assert.equal(final.section, 'gate');
-  assert.equal(final.sectionIndex, 6);
-  assert.equal(final.lastLane, 0);
-  assert.equal(final.cleanGates, 58);
+  for (const key of ['section', 'sectionId', 'sectionIndex', 'lastLane', 'cleanGates']) {
+    assert.equal(final[key], expected[key], `Replay diverged on ${key}`);
+  }
   await capture('replay-tour-end', final, false);
 }
 
