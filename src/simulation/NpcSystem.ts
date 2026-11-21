@@ -1,10 +1,11 @@
 import { hashCoordinates, hashUnit } from '../core/SeededHash';
 import type { SkiState } from './SkiPhysics';
 import { FeatureGeneratorCPU, type FeatureDescriptor, type SectionSource } from '../world/FeatureGeneratorCPU';
-import { hitsJumpObstacle, pathCenter, pathHalfWidth, PREVIEW_DISTANCE } from '../world/EndlessMountain';
+import { hitsJumpObstacle, pathCenter, pathHalfWidth, PREVIEW_DISTANCE, skiBand, type Section } from '../world/EndlessMountain';
+import { crowdLane, MAX_CROWD_NPCS, NORMAL_NPCS, POTATO_CROWD_NPCS } from '../world/RouteExpansion';
 import type { MountainRun } from './MountainRun';
 
-export const MAX_NPCS = 5;
+export const MAX_NPCS = MAX_CROWD_NPCS;
 export const NPC_COLLISION_RADIUS = 0.66;
 
 export type NpcType = 'speed-skier' | 'beginner-skier' | 'snowboarder';
@@ -37,6 +38,8 @@ export interface NpcState {
   airborne: number;
   collisionCooldown: number;
   avalancheHit?: number;
+  trafficGroup?: number;
+  trafficX?: number;
 }
 
 export interface NpcPlayerContact {
@@ -89,20 +92,13 @@ const createNpc = (slot: number): NpcState => ({
 });
 
 export class NpcSystem {
-  readonly states: NpcState[] = Array.from({ length: MAX_NPCS }, (_, slot) => createNpc(slot));
+  readonly states: NpcState[];
   readonly metrics: NpcMetrics = { active: 0, recycled: 0, simulationMs: 0 };
   private readonly features: FeatureGeneratorCPU;
   private readonly obstacle: FeatureDescriptor = {
     id: 0, type: 'none', x: 0, y: 0, radius: 0, scale: 0,
   };
-  private readonly contact: NpcPlayerContact = {
-    npc: this.states[0]!,
-    normalX: 0,
-    normalY: -1,
-    relativeSpeed: 0,
-    severity: 0,
-    glancing: false,
-  };
+  private readonly contact: NpcPlayerContact;
   private labActive = false;
   private labType: NpcType = 'speed-skier';
   private labPose = 0;
@@ -111,9 +107,12 @@ export class NpcSystem {
 
   constructor(
     private readonly seed: number,
-    private readonly populationLimit = MAX_NPCS,
+    private readonly populationLimit = NORMAL_NPCS,
     private readonly course?: SectionSource,
   ) {
+    this.states = Array.from({ length: course ? MAX_NPCS : NORMAL_NPCS }, (_, slot) => createNpc(slot));
+    this.contact = { npc: this.states[0]!, normalX: 0, normalY: -1,
+      relativeSpeed: 0, severity: 0, glancing: false };
     this.features = new FeatureGeneratorCPU(seed, course);
   }
 
@@ -121,6 +120,7 @@ export class NpcSystem {
     this.recycled = 0;
     for (const npc of this.states) {
       npc.generation = 0;
+      npc.trafficGroup = undefined;
       this.spawn(npc, player, true);
     }
   }
@@ -149,6 +149,8 @@ export class NpcSystem {
       this.finishMetrics(started);
       return;
     }
+    const section = this.course?.sectionAt(player.position.y);
+    if (section?.trail === 'busy') this.feedTraffic(section, player);
     for (const npc of this.states) {
       if (!npc.active) continue;
       npc.collisionCooldown = Math.max(0, npc.collisionCooldown - delta);
@@ -159,7 +161,7 @@ export class NpcSystem {
       }
       if (
         npc.y < player.position.y - 54 ||
-        npc.y > player.position.y + 96 ||
+        npc.y > player.position.y + (npc.trafficX === undefined ? 96 : 190) ||
         Math.abs(npc.x - player.position.x) > 82
       ) {
         npc.generation += 1;
@@ -208,6 +210,10 @@ export class NpcSystem {
     let intent = Math.sin(npc.phase * tempo + npc.variation * 6.28);
     if (npc.type === 'beginner-skier') intent *= 0.58;
     if (npc.type === 'snowboarder') intent = Math.sin(npc.phase * tempo + npc.variation * 8.7) * 0.82;
+    if (npc.trafficX !== undefined) {
+      const line = npc.trafficX + Math.sin(npc.phase * 0.85) * (1.5 + npc.variation * 2.2);
+      intent = Math.max(-1, Math.min(1, (line - npc.x - npc.velocityX * 0.36) * 0.31));
+    }
 
     const lookX = npc.x + npc.velocityX * 0.34;
     const lookY = npc.y + npc.velocityY * 0.42;
@@ -216,6 +222,12 @@ export class NpcSystem {
       const offset = lookX - pathCenter(section, lookY);
       const width = pathHalfWidth(section, lookY);
       if (Math.abs(offset) > width - 5) intent = -Math.sign(offset);
+      if (section.trail === 'sun' || section.trail === 'speed') {
+        const center = pathCenter(section, lookY);
+        const side = Math.sign(npc.x - section.center) || (npc.slot % 2 ? -1 : 1);
+        const shoulder = center + side * (section.trail === 'sun' ? width * 0.63 : width - 5);
+        intent = Math.max(-1, Math.min(1, (shoulder - lookX) * 0.27));
+      }
       const jump = section.jumps.find((line) => npc.y > line.lip - 90 && npc.y <= line.gapEnd);
       if (jump) {
         const offset = npc.x - jump.x;
@@ -252,10 +264,9 @@ export class NpcSystem {
     npc.velocityY += (targetSpeed - npc.velocityY) * (1 - Math.exp(-1.1 * delta));
     npc.x += npc.velocityX * delta;
     npc.y += npc.velocityY * delta;
-    if (section?.trail === 'chute') {
-      const center = pathCenter(section, npc.y);
-      const width = pathHalfWidth(section, npc.y) - NPC_COLLISION_RADIUS;
-      const clamped = Math.max(center - width, Math.min(center + width, npc.x));
+    if (section?.trail === 'chute' || section?.trail === 'patrol') {
+      const band = skiBand(section, npc.x, npc.y);
+      const clamped = Math.max(band.left + NPC_COLLISION_RADIUS, Math.min(band.right - NPC_COLLISION_RADIUS, npc.x));
       if (clamped !== npc.x) {
         npc.x = clamped;
         npc.velocityX *= 0.35;
@@ -357,9 +368,14 @@ export class NpcSystem {
 
   private spawn(npc: NpcState, player: Readonly<SkiState>, initial: boolean): void {
     npc.avalancheHit = undefined;
+    npc.trafficX = undefined;
+    const playerTrail = this.course?.sectionAt(player.position.y)?.trail;
+    const population = playerTrail === 'sun' || playerTrail === 'speed' ? 1 :
+      playerTrail === 'patrol' || playerTrail === 'hazards' ? 2 : playerTrail === 'busy' ? 0 : this.populationLimit;
     const key = npc.generation + (initial ? 0 : 1);
-    npc.active = npc.slot < Math.min(3, this.populationLimit) ||
-      (npc.slot < this.populationLimit && hashUnit(this.seed, npc.slot, key, 20) > 0.32);
+    npc.active = npc.slot < Math.min(3, population) ||
+      (npc.slot < population && hashUnit(this.seed, npc.slot, key, 20) > 0.32);
+    if (!npc.active && this.course) return;
     npc.type = TYPE_BY_INDEX[hashCoordinates(this.seed, npc.slot, key, 21) % 3]!;
     npc.variation = hashUnit(this.seed, npc.slot, key, 22);
     const side = hashUnit(this.seed, npc.slot, key, 23) * 2 - 1;
@@ -370,6 +386,7 @@ export class NpcSystem {
       const center = pathCenter(section, npc.y);
       const width = pathHalfWidth(section, npc.y);
       npc.x = center + side * width * (0.54 + hashUnit(this.seed, npc.slot, key, 24) * 0.31);
+      if (section.trail === 'speed' || section.trail === 'hazards') npc.x = center + (side < 0 ? -1 : 1) * (width - 3);
       if (npc.y > section.end - PREVIEW_DISTANCE) {
         npc.x = section.center + Math.sign(side || 1) * (22 + npc.variation);
       }
@@ -391,6 +408,43 @@ export class NpcSystem {
     npc.recovery = 0;
     npc.airborne = 0;
     npc.collisionCooldown = 0;
+  }
+
+  private feedTraffic(section: Section, player: Readonly<SkiState>): void {
+    const group = section.expansion.traffic.findIndex((y) =>
+      y >= player.position.y + 99 && y <= player.position.y + 129);
+    if (group < 0) return;
+    const key = section.index * 8 + group;
+    const limit = this.populationLimit === 3 ? POTATO_CROWD_NPCS : MAX_CROWD_NPCS;
+    for (let slot = 0; slot < limit; slot += 1) {
+      const npc = this.states[slot]!;
+      if (npc.active || npc.trafficGroup === key) continue;
+      npc.trafficGroup = key;
+      npc.active = true;
+      npc.variation = hashUnit(section.id, group, slot, 6);
+      npc.type = TYPE_BY_INDEX[(slot * 2 + group) % TYPE_BY_INDEX.length]!;
+      npc.trafficX = section.center + crowdLane(slot, group);
+      npc.x = npc.trafficX;
+      npc.y = section.expansion.traffic[group]! + (slot >= 8 ? 16 : 0) + (slot % 3) * 2.4;
+      npc.velocityX = 0;
+      npc.velocityY = npc.type === 'beginner-skier' ? 10.5 : npc.type === 'speed-skier' ? 29 : 20.5;
+      npc.facing = 0;
+      npc.carve = 0;
+      npc.pose = 0;
+      npc.phase = npc.variation * 8;
+      npc.compression = 0;
+      npc.traverse = 0;
+      npc.recovery = 0;
+      npc.airborne = 0;
+      npc.fall = 'none';
+      npc.fallTime = 0;
+      npc.collisionCooldown = 0;
+      npc.avalancheHit = undefined;
+      npc.hatColor = slot % 6;
+      npc.topColor = (slot + group + 2) % 6;
+      npc.bottomColor = (slot * 3 + 4) % 6;
+      npc.accessoryColor = (slot + 3) % 6;
+    }
   }
 
   private resolveNpcContacts(): void {

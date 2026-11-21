@@ -2,7 +2,7 @@ import type { InputState } from '../input/InputState';
 import { isScenario, isTrail, type MountainStart } from '../world/EndlessMountain';
 
 const CLASSIC_VERSION = 5;
-const MOUNTAIN_VERSION = 7;
+const MOUNTAIN_VERSION = 8;
 const MAX_MOUNTAIN_RUNS = 16000;
 
 interface ReplayRun {

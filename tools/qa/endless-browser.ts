@@ -204,7 +204,7 @@ async function encounters() {
 
   const legacy = Buffer.from(JSON.stringify({ version: 6, seed, runs: [] })).toString('base64url');
   await page.goto(`${base}/#replay=${legacy}`);
-  await page.getByText(/Version 6 replays play on the original Endless Mountain branch/).waitFor();
+  await page.getByText(/Open v7 on codex\/mountain-trail-pass/).waitFor();
 
   await load('gate', 'encounter');
   await beginDrag();

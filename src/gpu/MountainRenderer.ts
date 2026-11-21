@@ -4,8 +4,9 @@ import {
 import type { MountainRun } from '../simulation/MountainRun';
 import {
   FORK_BANNER_OFFSET, FORK_COLORS, FORK_ENTRANCE_OFFSET, FORK_GUIDE_OFFSET,
-  FORK_LENGTH, LANE_SPACING, jumpGapEdge, pathCenter, pathHalfWidth, type JumpLine, type Section,
+  FORK_LENGTH, LANE_SPACING, jumpGapEdge, pathCenter, pathHalfWidth, patrolMedian, type JumpLine, type Section,
 } from '../world/EndlessMountain';
+import { BOULDER_RADIUS, ICE_FALL_SECONDS, ICE_LINGER_SECONDS, type Side } from '../world/RouteExpansion';
 import { createAvalancheShader } from './shaders/avalanche';
 
 const PALETTE = {
@@ -14,6 +15,11 @@ const PALETTE = {
   air: ['#d2cbeb', '#b9b4db', '#e2dcf1'],
   chute: ['#8398a7', '#546d80', '#acc2cc'],
   avalanche: ['#b8cbd9', '#9cb3c5', '#d8e4ea'],
+  sun: ['#ddd6bf', '#cfbca0', '#f5e8ce'],
+  busy: ['#ddd6bf', '#cfbca0', '#f5e8ce'],
+  patrol: ['#8da4af', '#526b7a', '#d1dce1'],
+  speed: ['#91a9c1', '#758faa', '#d5e4ef'],
+  hazards: ['#839cae', '#526b84', '#d0e2ec'],
 } as const;
 const WARM: [string, string] = ['#ed764d', '#bd443d'];
 const BLUE: [string, string] = ['#4e9cde', '#285b97'];
@@ -91,32 +97,37 @@ export class MountainRenderer {
   private readonly course = new CourseMesh(2400, -0.26);
   private readonly avalanche = createAvalancheShader();
   private readonly powder = new Mesh(new PlaneGeometry(1, 1), this.avalanche.material);
-  readonly meshes = [this.terrain.mesh, this.course.mesh, this.powder];
+  private readonly hazards = new CourseMesh(768, 0.39);
+  readonly meshes = [this.terrain.mesh, this.course.mesh, this.powder, this.hazards.mesh];
   private revision = -1;
   private band = Number.NaN;
   private bandHeight = 0;
   private nextGate = -1;
+  private nextFlag = -1;
 
   get drawCalls(): number {
     return Number(this.terrain.mesh.geometry.drawRange.count > 0) +
-      Number(this.course.mesh.geometry.drawRange.count > 0) + Number(this.powder.visible);
+      Number(this.course.mesh.geometry.drawRange.count > 0) + Number(this.powder.visible) +
+      Number(this.hazards.mesh.geometry.drawRange.count > 0);
   }
 
   update(run: MountainRun, cameraX: number, cameraY: number, viewHeight: number): void {
     const band = Math.floor(cameraY / 18);
     if (run.revision !== this.revision || band !== this.band || viewHeight !== this.bandHeight ||
-      run.gateIndex !== this.nextGate) {
+      run.gateIndex !== this.nextGate || run.expansion.flagIndex !== this.nextFlag) {
       this.revision = run.revision;
       this.band = band;
       this.bandHeight = viewHeight;
       this.nextGate = run.gateIndex;
+      this.nextFlag = run.expansion.flagIndex;
       const min = band * 18 - viewHeight / 2 - 22;
       const max = band * 18 + viewHeight / 2 + 40;
       this.terrain.clear(run.section.center, band * 18);
       this.course.clear(run.section.center, band * 18);
       for (const section of [run.previous, run.section]) {
         if (section && min < section.end + 32 && max > section.start - 35) {
-          this.section(section, min, max, section === run.section ? run.gateIndex : -1);
+          this.section(section, min, max, section === run.section ? run.gateIndex : -1,
+            section === run.section ? run.expansion.flagIndex : -1);
         }
       }
       this.terrain.finish();
@@ -125,9 +136,10 @@ export class MountainRenderer {
     this.terrain.place(cameraX, cameraY);
     this.course.place(cameraX, cameraY);
     this.updatePowder(run, cameraX, cameraY, viewHeight);
+    this.updateHazards(run, cameraX, cameraY, viewHeight);
   }
 
-  private section(section: Section, min: number, max: number, nextGate: number): void {
+  private section(section: Section, min: number, max: number, nextGate: number, nextFlag: number): void {
     const { center, start, end, trail, opening, glade } = section;
     const [light, dark, rim] = PALETTE[trail];
     for (let y = start + Math.max(0, Math.floor((min - start) / 5)) * 5; y < Math.min(max, end); y += 5) {
@@ -139,7 +151,7 @@ export class MountainRenderer {
       for (const side of [-1, 1]) {
         const edge = a + wa * side;
         const endEdge = b + wb * side;
-        if (trail === 'chute') {
+        if (trail === 'chute' || trail === 'patrol' || trail === 'hazards') {
           const thickness = 12 + 5 * Math.cos(y * 0.14);
           const nextThickness = 12 + 5 * Math.cos(next * 0.14);
           this.terrain.strip(rim, edge, edge + thickness * side, y,
@@ -148,6 +160,15 @@ export class MountainRenderer {
             endEdge, endEdge + (nextThickness - 2) * side, next);
           this.course.triangle(dark, edge + thickness * side, y, edge + 1.3 * side, y, endEdge + nextThickness * 0.52 * side, next);
           this.course.triangle('#c1d4de', edge, y, edge + 3.8 * side, y, endEdge, next);
+        } else if (trail === 'sun' || trail === 'busy') {
+          const drift = 10 + 7 * Math.sin((y - start) / 28);
+          const nextDrift = 10 + 7 * Math.sin((next - start) / 28);
+          this.terrain.strip('#e6e0cd', edge, edge + side * (drift + 10), y,
+            endEdge, endEdge + side * (nextDrift + 10), next);
+          this.course.strip('#f4ebd8', edge - side * 3, edge + side * drift, y,
+            endEdge - side * 3, endEdge + side * nextDrift, next);
+          this.terrain.triangle('#d4c6af', edge + side * drift, y,
+            edge + side * (drift + 16), y, endEdge + side * (nextDrift + 13), next);
         } else if (trail === 'pine' || trail === 'avalanche') {
           const thickness = 2.5 + 1.3 * Math.cos(y * 0.17);
           const nextThickness = 2.5 + 1.3 * Math.cos(next * 0.17);
@@ -161,7 +182,22 @@ export class MountainRenderer {
             endEdge - 0.22 * side, endEdge + 0.22 * side, next);
         }
       }
+      if (trail === 'patrol') {
+        const mid = patrolMedian(section, y);
+        const nextMid = patrolMedian(section, next);
+        if (mid && nextMid) {
+          this.terrain.strip('#9badb9', mid.x - mid.width, mid.x + mid.width, y,
+            nextMid.x - nextMid.width, nextMid.x + nextMid.width, next);
+          this.course.strip('#e1ebec', mid.x - mid.width * 0.63, mid.x + mid.width * 0.16, y,
+            nextMid.x - nextMid.width * 0.63, nextMid.x + nextMid.width * 0.16, next);
+        }
+        for (const side of [-1, 1]) {
+          this.terrain.strip('#d4e4e8', a + side * (wa - 1), a + side * (wa - 0.66), y,
+            b + side * (wb - 1), b + side * (wb - 0.66), next);
+        }
+      }
     }
+    this.drawExpansion(section, min, max, nextFlag);
     if (opening && start + 34 >= min && start - 30 < max) this.summit(center, start);
     if (glade && glade.y - 52 < max && glade.y + 47 > min) this.glade(section);
     for (let i = 0; i < section.gates.length; i += 1) {
@@ -201,6 +237,136 @@ export class MountainRenderer {
       this.beacon(edge + wave.safeSide * 12, wave.warningAt + 21, '#387a79');
     }
     if (end - FORK_BANNER_OFFSET - 5 < max) this.junction(section);
+  }
+
+  private drawExpansion(section: Section, min: number, max: number, nextFlag: number): void {
+    const { center, expansion } = section;
+    const reveal = expansion.bowlReveal;
+    if (reveal !== null && reveal + 57 > min && reveal - 34 < max) {
+      for (const side of [-1, 1]) {
+        this.terrain.triangle('#ede2c9', center + side * 42, reveal - 31,
+          center + side * 62, reveal + 54, center + side * 18, reveal + 14);
+        this.course.triangle('#f5ecd7', center + side * 42, reveal - 31,
+          center + side * 54, reveal + 38, center + side * 33, reveal + 12);
+        this.course.triangle('#c6ae91', center + side * 42, reveal - 31,
+          center + side * 72, reveal + 16, center + side * 62, reveal + 54);
+      }
+    }
+    for (const split of expansion.patrol) {
+      if (split.entry - 40 > max || split.merge + 8 < min) continue;
+      const x = pathCenter(section, split.entry - 17);
+      this.gantry(x, split.entry - 32, 23, '#4b625d');
+      this.gantry(x - 7.4, split.entry - 14, 13.6, '#5c6f69');
+      this.gantry(x + 7.4, split.entry - 14, 13.6, '#5c6f69');
+      for (let y = split.entry + 32; y < split.merge - 13; y += 18) {
+        const mid = patrolMedian(section, y)!;
+        this.course.triangle('#788b94', mid.x - mid.width * 0.8, y - 3,
+          mid.x + mid.width * 0.55, y + 2, mid.x, y + 10);
+      }
+      for (const side of [-1, 1]) {
+        this.beacon(pathCenter(section, split.merge) + side * 6.1, split.merge, '#557e75');
+      }
+    }
+    const timed = expansion.timed;
+    if (timed) {
+      for (const y of [timed.start, timed.finish]) {
+        if (y < min - 4 || y > max + 4) continue;
+        this.gantry(center, y, timed.startHalfWidth * 2, '#a53a48');
+        for (let i = -9; i < 10; i += 1) {
+          this.course.box(i % 2 === 0 ? '#607387' : '#f4f9f7', center + i * 1.95, y + 2, 1.95, 1.1);
+        }
+      }
+      for (let i = 0; i < timed.flags.length; i += 1) {
+        const flag = timed.flags[i]!;
+        if (flag.y + 10 < min || flag.y - 56 > max) continue;
+        const target = flag.x + flag.passSide * 5.8;
+        const paint = i === nextFlag ? '#b85335' : '#446c9a';
+        this.terrain.strip('#e2edf4', target - 0.4, target + 0.4, flag.y - 46,
+          target - 4.3, target + 4.3, flag.y - 1);
+        this.beacon(flag.x, flag.y, paint);
+        this.sideArrow(flag.x + 4.2 * flag.passSide, flag.y - 3, flag.passSide, paint);
+        this.course.box('#c3d7e8', flag.x + flag.passSide * 6.1, flag.y, 9.5, 0.42);
+      }
+    }
+    for (const line of expansion.boulders) {
+      if (line.start - 86 > max || line.start + 12 < min) continue;
+      for (let y = line.start - 75; y < line.start; y += 18) {
+        this.chevron(line.x, y, 3.05, '#a16c43');
+      }
+      this.beacon(line.x - 6.5, line.start, '#8f513b');
+      this.beacon(line.x + 6.5, line.start, '#8f513b');
+    }
+    for (const target of expansion.ice) {
+      if (target.y + 29 < min || target.y - 34 > max) continue;
+      const side = target.x >= center ? 1 : -1;
+      for (let i = 0; i < 4; i += 1) {
+        const y = target.y - 16 + i * 9;
+        const edge = pathCenter(section, y) + side * (pathHalfWidth(section, y) + 1.3);
+        this.course.triangle('#8abacb', edge, y, edge + side * (5 + i), y - 2.9, edge + side * 2, y + 8);
+        this.course.triangle('#e7f6fa', edge, y, edge + side * 2.4, y - 0.8, edge + side * 2, y + 8);
+      }
+    }
+  }
+
+  private sideArrow(x: number, y: number, side: Side, paint: string): void {
+    this.course.triangle(paint, x - side * 2.7, y - 1.65, x - side * 2.7, y + 1.65, x + side * 2.1, y);
+  }
+
+  private updateHazards(run: MountainRun, cameraX: number, cameraY: number, height: number): void {
+    const hazard = run.expansion;
+    const rock = Math.abs(hazard.rockY - cameraY) < height * 0.5 + 11 ? hazard.boulder : undefined;
+    const ice = hazard.ice && Math.abs(hazard.ice.y - cameraY) < height * 0.5 + 17 ? hazard.ice : null;
+    if (!rock && !ice && this.hazards.mesh.geometry.drawRange.count === 0) return;
+    this.hazards.clear(cameraX, cameraY);
+    this.hazards.place(cameraX, cameraY);
+    if (rock) {
+      const x = hazard.rockX;
+      const y = hazard.rockY;
+      const rotation = (y - rock.start) / BOULDER_RADIUS;
+      this.disk(x + 0.6, y - 0.58, BOULDER_RADIUS * 1.13, ['#93a5b2'], 0);
+      this.disk(x, y, BOULDER_RADIUS, ['#40586b', '#597080', '#9eabb0', '#d0dce0', '#718392'], rotation);
+      for (let i = 1; i < 6; i += 1) {
+        const drift = Math.sin(rotation * 1.8 + i) * 2.5;
+        this.hazards.triangle('#d7e5eb', x + drift, y - i * 2,
+          x + drift + 0.9, y - i * 2 - 1.7, x + drift - 0.6, y - i * 2 - 2.3);
+      }
+    }
+    if (ice) {
+      const { x, y, radius } = ice;
+      const time = hazard.iceTime;
+      this.disk(x, y, radius, [time > 0 ? '#638da9' : '#85bacd'], 0);
+      this.disk(x, y, radius - 0.48, [time > 0 ? '#335975' : '#d2edf5'], 0);
+      for (let i = 0; i < 8; i += 1) {
+        const bearing = i * Math.PI / 4;
+        const vx = Math.cos(bearing);
+        const vy = Math.sin(bearing);
+        this.hazards.triangle('#ecf9fc', x + vx * (radius - 1.1), y + vy * (radius - 1.1),
+          x + vx * radius - vy * 0.36, y + vy * radius + vx * 0.36,
+          x + vx * radius + vy * 0.36, y + vy * radius - vx * 0.36);
+      }
+      if (time < ICE_FALL_SECONDS) {
+        const lift = Math.max(0, time) * 29;
+        const spread = time < 0 ? Math.min(1, -time / ICE_LINGER_SECONDS) : 0;
+        for (let i = 0; i < 6; i += 1) {
+          const direction = i * 2.39;
+          const dx = Math.cos(direction) * (1.2 + spread * 3.6);
+          const dy = Math.sin(direction) * (1.2 + spread * 3.6) - lift;
+          this.hazards.triangle(i % 2 ? '#ecfbff' : '#80c2db', x + dx - 0.73, y + dy - 0.6,
+            x + dx + 0.82, y + dy, x + dx + 0.1, y + dy + 1.5);
+        }
+      }
+    }
+    this.hazards.finish();
+  }
+
+  private disk(x: number, y: number, radius: number, tones: readonly string[], rotation: number): void {
+    for (let i = 0; i < 20; i += 1) {
+      const a = rotation + i * Math.PI / 10;
+      const b = a + Math.PI / 10;
+      this.hazards.triangle(tones[Math.floor(i / 4) % tones.length]!, x, y,
+        x + radius * Math.cos(a), y + radius * Math.sin(a),
+        x + radius * Math.cos(b), y + radius * Math.sin(b));
+    }
   }
 
   private glade(section: Section): void {

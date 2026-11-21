@@ -57,6 +57,7 @@ export class GameRenderer {
   private viewHeight = BASE_VIEW_HEIGHT;
   private cameraWorldX = 0;
   private cameraWorldY = 0;
+  private snowWarmth = 0;
   private markersVisible: boolean;
   private poseOverride: SkierPoseName | null = null;
   private readonly pose = createPoseParameters();
@@ -154,8 +155,15 @@ export class GameRenderer {
     const speedLookAhead = Math.max(0, Math.min(1, (speed - 10) / 24));
     const baseLookAhead = this.landscapeMobileComposition ? 0.32 : 0.19;
     const speedLookAheadRange = this.landscapeMobileComposition ? 0.025 : 0.055;
+    const timed = this.mountain?.section.expansion.timed;
+    const courseLookAhead = timed && state.position.y >= timed.start - 45 &&
+      state.position.y <= timed.finish + 25 ? 0.13 : 0;
     const targetY = state.position.y + this.viewHeight *
-      (baseLookAhead + speedLookAhead * speedLookAheadRange);
+      (baseLookAhead + speedLookAhead * speedLookAheadRange + courseLookAhead);
+    const sun = this.mountain?.section.expansion.bowlReveal;
+    const light = sun != null ? Math.max(0, Math.min(1, (state.position.y - sun + 38) / 57)) : 0;
+    this.snowWarmth += (light - this.snowWarmth) * Math.min(1, deltaSeconds * 3.8);
+    this.snow.warmth.value = this.snowWarmth;
     this.cameraWorldY +=
       (targetY - this.cameraWorldY) * (1 - Math.exp(-deltaSeconds * 5.5));
     this.view.x = this.cameraWorldX;
@@ -342,6 +350,10 @@ export class GameRenderer {
       Number(this.crashTrailMesh.visible) +
       Number(this.markersVisible) +
       Number(this.collisionDebugMesh.visible);
+  }
+
+  get visibleRiders(): number {
+    return this.npcs.mesh.visible ? this.npcs.mesh.count : 0;
   }
 
   get visibleFeatureEstimate(): number {

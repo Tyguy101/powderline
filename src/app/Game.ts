@@ -20,7 +20,8 @@ import { TimingCounter } from '../instrumentation/PerformanceCounters';
 import { LifecycleManager, type LifecyclePauseReason } from './LifecycleManager';
 import { MountainRun } from '../simulation/MountainRun';
 import { MountainHUD } from '../ui/MountainHUD';
-import { hitsJumpObstacle, jumpAtLip, laneAt, pathCenter, pathHalfWidth } from '../world/EndlessMountain';
+import { hitsJumpObstacle, jumpAtLip, laneAt, pathCenter, pathHalfWidth, patrolMedian, skiBand } from '../world/EndlessMountain';
+import { BOULDER_SPEED, patrolSplitAt } from '../world/RouteExpansion';
 
 export class Game {
   private readonly physics = new SkiPhysics();
@@ -132,6 +133,8 @@ export class Game {
       ? () => this.physics.beginJump()
       : undefined;
     globalThis.__POWDERLINE_REPLAY__ = config.developmentMode ? () => this.replay.serialize() : undefined;
+    globalThis.__POWDERLINE_RIDERS__ = config.developmentMode ? () => this.npcs.states.filter((npc) => npc.active)
+      .map(({ x, y, velocityY, slot, type }) => ({ x, y, velocityY, slot, type })) : undefined;
     this.loop = new FixedStepLoop(
       config.fixedStepSeconds,
       config.maxFrameSeconds,
@@ -157,7 +160,9 @@ export class Game {
             this.before.x = state.position.x;
             this.before.y = state.position.y;
           }
-          if (!this.npcInspectionActive) this.physics.step(delta, replayInput);
+          if (!this.npcInspectionActive) {
+            this.physics.step(delta, replayInput, this.mountain?.downhillMultiplier(state.position.y));
+          }
           if (this.npcSimulationEnabled) {
             this.npcs.step(delta, this.physics.state);
           }
@@ -239,12 +244,16 @@ export class Game {
           }
           this.collisionTiming.push(performance.now() - collisionStarted);
           if (this.mountain && !state.crashed && !this.npcInspectionActive) {
+            if (this.mountain.expansion.timer === 'running' &&
+                Math.abs(state.position.x - pathCenter(this.mountain.section, state.position.y)) >
+                pathHalfWidth(this.mountain.section, state.position.y)) this.mountain.expansion.outsideCourse = true;
             this.keepInsidePiste();
             if (this.collisionsEnabled && hitsJumpObstacle(this.mountain.section, state.position, state.airborneHeight)) {
               this.physics.crash();
             } else {
-              const outcome = this.mountain.advance(this.before, state.position, state.airborne, delta);
-              if (outcome === 'caught') this.physics.crash();
+              const outcome = this.mountain.advance(this.before, state.position, state.airborne, delta,
+                state.velocityY, this.collisionsEnabled, replayInput);
+              if (outcome === 'caught' || outcome === 'ice' || outcome === 'boulder') this.physics.crash();
               if (outcome === 'transition') this.saveCheckpoint();
             }
           } else {
@@ -264,6 +273,7 @@ export class Game {
               this.physics.state.crash.family,
               this.mountain?.avalanche === 'caught',
               replayAvailable ? undefined : 'Replay unavailable for this run.',
+              this.mountain?.expansion.impact,
             );
           }
           if (!this.config.performance.disabled.has('trails')) {
@@ -288,9 +298,9 @@ export class Game {
     const section = this.mountain?.sectionAt(position.y) ?? this.mountain?.section;
     if (!section) return;
     const y = Math.min(position.y, section.end);
-    const center = pathCenter(section, y);
-    const width = pathHalfWidth(section, y) - SKIER_COLLISION_RADIUS;
-    const corrected = Math.max(center - width, Math.min(center + width, position.x));
+    const band = skiBand(section, position.x, y);
+    const corrected = Math.max(band.left + SKIER_COLLISION_RADIUS,
+      Math.min(band.right - SKIER_COLLISION_RADIUS, position.x));
     if (position.x !== corrected) {
       if ((position.x - corrected) * this.physics.state.velocityX > 0) this.physics.state.velocityX = 0;
       position.x = corrected;
@@ -439,7 +449,7 @@ export class Game {
     }
     this.metricsPublishCountdown -= 1;
     if (this.metricsPublishCountdown <= 0) {
-      this.metricsPublishCountdown = 10;
+      this.metricsPublishCountdown = this.config.qaTelemetry ? 1 : 10;
       Object.assign(this.publicMetrics, snapshot, {
       worldX: state.position.x,
       worldY: state.position.y,
@@ -472,6 +482,7 @@ export class Game {
       visibility: document.visibilityState,
       orientation: matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape',
       npcActive: this.npcs.metrics.active,
+      npcVisible: this.renderer.visibleRiders,
       npcRecycled: this.npcs.metrics.recycled,
       npcSimulationMs: this.npcs.metrics.simulationMs,
       simulationAverageMs: this.simulationTiming.snapshot.averageMs,
@@ -492,6 +503,14 @@ export class Game {
       if (this.mountain) {
         const { section, previous, lastLane, gateIndex, gateStreak, gateOutcome, cleanGates, avalanche, front } = this.mountain;
         const gate = section.gates[gateIndex];
+        const expansion = this.mountain.expansion;
+        const { timed, bowlReveal, boulders, ice } = section.expansion;
+        const flag = timed?.flags[expansion.flagIndex];
+        const split = patrolSplitAt(section, state.position.y);
+        const nextSplit = split ?? section.expansion.patrol.find((item) => item.entry > state.position.y);
+        const median = split ? patrolMedian(section, state.position.y) : null;
+        const rolling = expansion.boulder ?? boulders.find((item) => item.start >= state.position.y);
+        const iceTarget = expansion.ice ?? ice.find((item) => item.warningAt >= state.position.y);
         Object.assign(this.publicMetrics, {
           section: section.trail, sectionId: section.id, sectionIndex: section.index,
           sectionStart: section.start, sectionEnd: section.end, sectionCenter: section.center,
@@ -515,6 +534,21 @@ export class Game {
           retainedSections: previous ? 2 : 1, replayRuns: this.replay.recordingRuns,
           velocityX: state.velocityX, velocityY: state.velocityY,
           jumpSequence: state.jump.sequence,
+          bowlReveal: bowlReveal ?? 0,
+          patrolLane: expansion.patrolLane, patrolMerges: expansion.patrolMerges,
+          patrolEntryY: nextSplit?.entry ?? 0, patrolMergeY: nextSplit?.merge ?? 0,
+          patrolMedianX: median?.x ?? section.center, patrolMedianWidth: median?.width ?? 0,
+          timer: expansion.timer, timedMs: Math.round(expansion.time * 1000),
+          timedStartY: timed?.start ?? 0, timedFinishY: timed?.finish ?? 0,
+          timedFlags: expansion.flagIndex, timedFlagCount: timed?.flags.length ?? 0, timedMisses: expansion.flagMisses,
+          timedOutside: String(expansion.outsideCourse),
+          timedAim: flag ? flag.x + flag.passSide * 5.8 : section.center, timedFlagY: flag?.y ?? 0,
+          boulderActive: String(!!expansion.boulder), boulderStartY: rolling?.start ?? 0,
+          boulderSpeed: section.trail === 'hazards' ? BOULDER_SPEED : 0,
+          boulderX: expansion.boulder ? expansion.rockX : rolling?.x ?? 0, boulderY: expansion.rockY,
+          boulderPasses: expansion.boulderPasses, icePasses: expansion.icePasses,
+          iceActive: String(!!expansion.ice), iceX: iceTarget?.x ?? 0, iceY: iceTarget?.y ?? 0,
+          iceWarningY: iceTarget?.warningAt ?? 0, iceTime: expansion.iceTime, hazardImpact: expansion.impact ?? 'none',
         });
       }
       globalThis.__POWDERLINE_METRICS__ = this.publicMetrics;
@@ -535,4 +569,5 @@ declare global {
   var __POWDERLINE_METRICS__: Record<string, number | string> | undefined;
   var __POWDERLINE_TRIGGER_JUMP__: (() => void) | undefined;
   var __POWDERLINE_REPLAY__: (() => string) | undefined;
+  var __POWDERLINE_RIDERS__: (() => Array<{ x: number; y: number; velocityY: number; slot: number; type: string }>) | undefined;
 }

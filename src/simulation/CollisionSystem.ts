@@ -1,6 +1,6 @@
 import type { FeatureDescriptor } from '../world/FeatureGeneratorCPU';
 import { FeatureGeneratorCPU, type SectionSource } from '../world/FeatureGeneratorCPU';
-import { pathCenter, pathHalfWidth } from '../world/EndlessMountain';
+import { pathCenter, pathHalfWidth, skiBand } from '../world/EndlessMountain';
 import type { SkiState } from './SkiPhysics';
 
 export const SKIER_COLLISION_RADIUS = 0.62;
@@ -41,11 +41,14 @@ export class CollisionSystem {
     const section = this.course?.sectionAt(state.position.y);
     if (!section) return null;
     const { x, y } = state.position;
-    const center = pathCenter(section, y);
+    const band = section.trail === 'patrol' ? skiBand(section, x, y) : null;
+    const center = band ? (band.left + band.right) * 0.5 : pathCenter(section, y);
     const side = Math.sign(x - center);
-    const edge = center + side * pathHalfWidth(section, y);
+    const edge = band ? (side < 0 ? band.left : band.right) : center + side * pathHalfWidth(section, y);
     if ((x - edge) * side < -SKIER_COLLISION_RADIUS || side === 0) return null;
-    const downhillEdge = pathCenter(section, y + 0.5) + side * pathHalfWidth(section, y + 0.5);
+    const nextBand = band ? skiBand(section, x, y + 0.5) : null;
+    const downhillEdge = nextBand ? (side < 0 ? nextBand.left : nextBand.right)
+      : pathCenter(section, y + 0.5) + side * pathHalfWidth(section, y + 0.5);
     const slope = (downhillEdge - edge) * 2;
     const length = Math.hypot(1, slope);
     this.contact.normalX = -side / length;

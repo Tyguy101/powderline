@@ -43,10 +43,12 @@ export class CrashOverlay {
     });
   }
 
-  show(distance: number, replay: string, family = 'face-plant', avalanche = false, replayStatus = 'Replay recording limit reached.'): void {
+  show(distance: number, replay: string, family = 'face-plant', avalanche = false,
+    replayStatus = 'Replay recording limit reached.', impact?: 'ice' | 'boulder'): void {
     this.distance.textContent = `${Math.floor(distance)} m`;
     const title = this.root.querySelector<HTMLElement>('[data-crash-title]')!;
     title.textContent =
+      impact === 'ice' ? 'Hit by falling ice.' : impact === 'boulder' ? 'Caught by a rolling boulder.' :
       avalanche ? 'Caught by the avalanche.' : family === 'obstacle-slam'
         ? 'Tree hugged back.'
         : family === 'rolling-tumble'

@@ -1,6 +1,10 @@
 import { hashCoordinates, hashUnit } from '../core/SeededHash';
 import type { WorldPosition } from '../core/WorldCoordinates';
 import type { FeatureDescriptor } from './FeatureGeneratorCPU';
+import {
+  hazardWidth, makeExpansion, patrolCenterOffset, patrolMedianWidth, patrolOuterWidth, patrolSplitAt, smoothstep as ease,
+  type ExpansionLayout,
+} from './RouteExpansion';
 
 export const TRAILS = {
   pine: { name: 'Pine Glades', difficulty: 'Normal', cue: 'Open lines through the pines', color: '#167866' },
@@ -8,10 +12,15 @@ export const TRAILS = {
   air: { name: 'Big Air Park', difficulty: 'Extreme', cue: 'Jump lines and clear bypasses', color: '#9a4ab4' },
   chute: { name: 'Needle Chute', difficulty: 'Extreme', cue: 'Brake before the rock narrows', color: '#a65a26' },
   avalanche: { name: 'Avalanche Alley', difficulty: 'Dangerous', cue: 'Follow the crossing markers', color: '#b53e4d' },
+  sun: { name: 'Sun Bowl', difficulty: 'Normal', cue: 'Open snow below the sun ridge', color: '#9a661d' },
+  patrol: { name: 'Patrol Road', difficulty: 'Difficult', cue: 'Brake early for the service-road bends', color: '#537d76' },
+  busy: { name: 'Busy Weekend', difficulty: 'Difficult', cue: 'Watch the groups ahead and pick a gap', color: '#367795' },
+  speed: { name: 'Down Hill Speed Run', difficulty: 'Extreme', cue: 'Follow the arrows around every flag', color: '#be5363' },
+  hazards: { name: 'Falling Ice and Rolling Boulders', difficulty: 'Dangerous', cue: 'Leave the rolling line and watch for ice shadows', color: '#804753' },
 } as const;
 
 export type Trail = keyof typeof TRAILS;
-export type MountainScenario = 'summit' | 'fork' | 'encounter';
+export type MountainScenario = 'summit' | 'fork' | 'encounter' | 'ice' | 'boulder';
 export type Lane = -1 | 0 | 1;
 export const LANES = [-1, 0, 1] as const;
 export const FORK_LENGTH = 104;
@@ -23,7 +32,10 @@ export const FORK_GUIDE_OFFSET = 89;
 export const FORK_ENTRANCE_OFFSET = 3;
 export const FORK_COLORS = ['#a02f32', '#e5b846', '#176344'] as const;
 export const WORLD_LOOK_BEHIND = 100;
-const MAIN_WIDTH: Record<Trail, number> = { pine: 43, gate: 36, air: 40, chute: 24, avalanche: 43 };
+const MAIN_WIDTH: Record<Trail, number> = {
+  pine: 43, gate: 36, air: 40, chute: 24, avalanche: 43,
+  sun: 54, patrol: 9, busy: 54, speed: 32, hazards: 37,
+};
 
 export interface MountainStart {
   trail: Trail;
@@ -82,6 +94,7 @@ export interface Section {
   glade: Glade | null;
   jumps: readonly JumpLine[];
   waves: readonly SlideWave[];
+  expansion: ExpansionLayout;
 }
 
 export function isTrail(value: unknown): value is Trail {
@@ -89,7 +102,7 @@ export function isTrail(value: unknown): value is Trail {
 }
 
 export function isScenario(value: unknown): value is MountainScenario {
-  return value === 'summit' || value === 'fork' || value === 'encounter';
+  return value === 'summit' || value === 'fork' || value === 'encounter' || value === 'ice' || value === 'boulder';
 }
 
 function offersFor(trail: Trail, id: number, variant: number): RouteOffer[] {
@@ -98,14 +111,24 @@ function offersFor(trail: Trail, id: number, variant: number): RouteOffer[] {
     gate: variant === 1 ? 'chute' : 'air',
     air: 'avalanche',
     chute: 'avalanche',
-    avalanche: variant === 1 ? 'air' : 'chute',
+    avalanche: 'hazards',
+    sun: 'patrol',
+    patrol: 'speed',
+    busy: 'air',
+    speed: 'hazards',
+    hazards: 'avalanche',
   };
   const right: Record<Trail, Trail> = {
-    pine: 'pine',
+    pine: 'sun',
     gate: 'pine',
     air: 'chute',
     chute: 'gate',
     avalanche: 'gate',
+    sun: 'pine',
+    patrol: 'busy',
+    busy: 'sun',
+    speed: 'chute',
+    hazards: 'busy',
   };
   const trails = [left[trail], trail, right[trail]];
   return LANES.map((lane, slot) => {
@@ -125,7 +148,10 @@ export function createSection(
   start: number,
 ): Section {
   const { id, trail, variant } = offer;
-  const length = ({ pine: 1390, gate: 1430, air: 1560, chute: 1220, avalanche: 1460 })[trail] +
+  const length = ({
+    pine: 1390, gate: 1430, air: 1560, chute: 1220, avalanche: 1460,
+    sun: 1230, patrol: 1220, busy: 1350, speed: 1320, hazards: 1470,
+  })[trail] +
     variant * 95 + Math.floor(hashUnit(id, 1, 0) * 140);
   const end = start + length;
   const gates: CourseGate[] = [];
@@ -227,7 +253,8 @@ export function createSection(
     }
   }
   return { id, index, trail, variant, center, entryLane: offer.lane, start, end, opening: index === 0,
-    offers: offersFor(trail, id, variant), gates, features, chute, glade, jumps, waves };
+    offers: offersFor(trail, id, variant), gates, features, chute, glade, jumps, waves,
+    expansion: makeExpansion(trail, id, variant, start, center) };
 }
 
 export function openingSection(seed: number, trail: Trail): Section {
@@ -249,19 +276,22 @@ export function spawnPoint(section: Section, scenario: MountainScenario): WorldP
   const { start, end, center, trail } = section;
   if (scenario === 'fork') return { x: center, y: end - PREVIEW_DISTANCE - 12 };
   if (scenario === 'summit') return { x: center, y: start };
+  if (trail === 'hazards') {
+    if (scenario === 'ice') return { x: center, y: section.expansion.ice[0]!.warningAt - 13 };
+    if (scenario === 'boulder') return { x: center, y: section.expansion.boulders[0]!.start - 72 };
+    return { x: center, y: section.expansion.boulders[1]!.start - 73 };
+  }
+  if (section.expansion.bowlReveal !== null) return { x: center, y: section.expansion.bowlReveal - 69 };
+  if (trail === 'patrol') return { x: pathCenter(section, start + 102), y: start + 102 };
   const wave = section.waves[0];
   if (wave) return { x: center, y: wave.warningAt - 16 };
   return { x: center, y: section.glade ? section.glade.y - 106 : start + (trail === 'chute' ? 82 : 63) };
 }
 
-function ease(t: number): number {
-  const a = Math.max(0, Math.min(1, t));
-  return a * a * (3 - 2 * a);
-}
-
 export function pathCenter(section: Section, y: number): number {
   const center = section.center - section.entryLane * LANE_SPACING *
     (1 - ease((y - section.start) / 76));
+  if (section.trail === 'patrol') return center + patrolCenterOffset(section, y);
   if (section.trail !== 'chute') return center;
   const index = chuteSegment(section, y);
   const first = section.chute[index]!;
@@ -283,6 +313,8 @@ export function pathHalfWidth(section: Section, y: number): number {
   const entry = ease((distance - 30) / 95);
   const exit = ease((finish - FORK_LENGTH) / 68);
   let width = MAIN_WIDTH[section.trail];
+  if (section.trail === 'patrol') width = patrolOuterWidth(section, y);
+  if (section.trail === 'hazards') width = hazardWidth(section, y);
   if (section.trail === 'chute') {
     const index = chuteSegment(section, y);
     const first = section.chute[index]!;
@@ -290,6 +322,23 @@ export function pathHalfWidth(section: Section, y: number): number {
     width = first.width + (next.width - first.width) * ease((y - first.y) / (next.y - first.y));
   }
   return ENTRY_WIDTH + (width - ENTRY_WIDTH) * entry * exit;
+}
+
+export function patrolMedian(section: Section, y: number): { x: number; width: number } | null {
+  const split = patrolSplitAt(section, y);
+  if (!split) return null;
+  const width = patrolMedianWidth(split, y);
+  return { x: pathCenter(section, y) - width * 0.2, width };
+}
+
+export function skiBand(section: Section, x: number, y: number): { left: number; right: number } {
+  const center = pathCenter(section, y);
+  const width = pathHalfWidth(section, y);
+  const median = patrolMedian(section, y);
+  if (!median || median.width < 0.38) return { left: center - width, right: center + width };
+  return x < median.x
+    ? { left: center - width, right: median.x - median.width }
+    : { left: median.x + median.width, right: center + width };
 }
 
 export function interpolateX(before: Readonly<WorldPosition>, after: Readonly<WorldPosition>, y: number): number {
@@ -308,7 +357,13 @@ export function describeSectionCell(section: Section | null, cellX: number, cell
   const side = Math.abs(x - pathCenter(section, y));
   const width = pathHalfWidth(section, y);
   const pick = hashUnit(id, cellX, cellY, 23);
-  if (trail === 'pine') {
+  if (trail === 'sun' || trail === 'busy') {
+    if (side < width + 8 || pick > 0.17) return;
+    target.type = pick < 0.08 ? 'rock' : 'tree';
+  } else if (trail === 'patrol') {
+    if (side < width + 4 || pick > 0.69) return;
+    target.type = pick < 0.36 ? 'rock' : 'tree';
+  } else if (trail === 'pine') {
     const grove = Math.sin((y - start) / 57) * Math.cos((x - center) / 14 + section.variant) +
       Math.sin((y - start) / 143 + section.variant) * 0.44;
     const gladeY = section.glade!.y;

@@ -28,6 +28,8 @@ const lead = Number(argument('lead', 'Infinity'));
 const wave = Number(argument('wave', '-1'));
 const forkRange = Number(argument('fork-range', '0'));
 const replayFile = argument('replay-file', '');
+const crowd = Number(argument('crowd', '0'));
+const combined = argument('combined', '') === 'true';
 const externalPreview = argument('url', '');
 const preview = externalPreview || 'http://127.0.0.1:4173';
 const reportDirectory = path.resolve('tools/reports');
@@ -163,13 +165,32 @@ try {
       throw new Error(`Avalanche benchmark did not reach the requested window: ${JSON.stringify(current)}`, { cause });
     }
   }
+  if (crowd || combined) {
+    const windowReached = await page.waitForFunction(({ count, overlap }) => {
+      const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+      if (m?.crashed === 'true') return 'crashed';
+      if (count && m?.section === 'busy' && m.npcActive >= count && m.npcVisible >= Math.ceil(count * 0.45)) return 'crowd';
+      if (overlap && m?.boulderActive === 'true' && m.iceActive === 'true' &&
+        m.iceTime < 1.3 && m.iceTime > 0.75 && m.sectionDistance > 920) return 'combined';
+      return false;
+    }, { count: crowd, overlap: combined }, { timeout: 48_000 });
+    if (await windowReached.jsonValue() === 'crashed') throw new Error('Skier crashed before the expansion benchmark window.');
+  }
   const metricsStart = await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__'));
   await page.evaluate(`(() => {
     const samples = [];
+    const peak = { npcActive: 0, npcVisible: 0, simultaneousHazardFrames: 0 };
+    globalThis.__POWDERLINE_WINDOW_PEAK__ = peak;
     let previous = performance.now();
     const sample = (now) => {
       samples.push(now - previous);
       previous = now;
+      const metrics = globalThis.__POWDERLINE_METRICS__;
+      if (metrics) {
+        peak.npcActive = Math.max(peak.npcActive, metrics.npcActive);
+        peak.npcVisible = Math.max(peak.npcVisible, metrics.npcVisible);
+        if (metrics.boulderActive === 'true' && metrics.iceActive === 'true') peak.simultaneousHazardFrames++;
+      }
       globalThis.__POWDERLINE_BENCHMARK_SAMPLES__ = samples;
       requestAnimationFrame(sample);
     };
@@ -185,6 +206,7 @@ try {
     return {
       metrics: Reflect.get(globalThis, '__POWDERLINE_METRICS__') as unknown,
       samples: Reflect.get(globalThis, '__POWDERLINE_BENCHMARK_SAMPLES__') as number[],
+      windowPeak: Reflect.get(globalThis, '__POWDERLINE_WINDOW_PEAK__') as unknown,
       canvas: {
         cssWidth: canvas?.clientWidth ?? 0,
         cssHeight: canvas?.clientHeight ?? 0,
@@ -214,7 +236,7 @@ try {
     browser: browserName,
     backend,
     route: { seed, section, start, drive, avalanche, lead: Number.isFinite(lead) ? lead : null,
-      wave, forkRange, replayFile: replayFile || null },
+      wave, forkRange, replayFile: replayFile || null, crowd, combined },
     durationSeconds,
     viewport: { width, height, dpr },
     canvas: { ...pageData.canvas, pixels: canvasPixels },
@@ -224,6 +246,7 @@ try {
     errors,
     metrics: pageData.metrics,
     metricsStart,
+    windowPeak: pageData.windowPeak,
   };
   const fileName = `${captureName}.json`;
   await writeFile(path.join(reportDirectory, fileName), JSON.stringify(result, null, 2));

@@ -1,4 +1,7 @@
 import type { WorldPosition } from '../core/WorldCoordinates';
+import type { InputState } from '../input/InputState';
+import { ExpansionRun, type HazardImpact } from './ExpansionRun';
+import { SPEED_RUN_MULTIPLIER } from '../world/RouteExpansion';
 import {
   interpolateX, laneAt, openingSection, slideEdge, spawnPoint, takeRoute,
   WORLD_LOOK_BEHIND, type Lane, type MountainStart, type Section,
@@ -7,6 +10,7 @@ import {
 export type AvalancheState = 'quiet' | 'warning' | 'chasing' | 'escaped' | 'caught';
 
 export class MountainRun {
+  readonly expansion = new ExpansionRun();
   section: Section;
   previous: Section | null = null;
   revision = 0;
@@ -39,6 +43,11 @@ export class MountainRun {
     return this.section.index * 8 + this.waveIndex;
   }
 
+  downhillMultiplier(y: number): number {
+    const timed = this.section.expansion.timed;
+    return timed && y >= timed.start && y < timed.finish ? SPEED_RUN_MULTIPLIER : 1;
+  }
+
   engulfed(x: number, y: number): boolean {
     const wave = this.wave;
     if (!wave || (this.avalanche !== 'chasing' && this.avalanche !== 'caught' &&
@@ -48,6 +57,7 @@ export class MountainRun {
   }
 
   retry(): void {
+    this.expansion.reset();
     this.gateIndex = 0;
     this.gateStreak = 0;
     this.gateOutcome = 'waiting';
@@ -68,7 +78,9 @@ export class MountainRun {
     return null;
   }
 
-  advance(before: Readonly<WorldPosition>, after: Readonly<WorldPosition>, airborne: boolean, delta: number): 'transition' | 'caught' | undefined {
+  advance(before: Readonly<WorldPosition>, after: Readonly<WorldPosition>, airborne: boolean,
+    delta: number, speed = (after.y - before.y) / delta, hazardsEnabled = true, input?: Readonly<InputState>):
+    'transition' | 'caught' | HazardImpact | undefined {
     const section = this.section;
     while (this.gateIndex < section.gates.length) {
       const gate = section.gates[this.gateIndex]!;
@@ -82,6 +94,10 @@ export class MountainRun {
       this.gateIndex += 1;
     }
     if (this.advanceSlide(after, delta)) return 'caught';
+    if (hazardsEnabled || section.trail !== 'hazards') {
+      const impact = this.expansion.advance(section, before, after, speed, airborne, delta, input);
+      if (impact) return impact;
+    }
     if (after.y < section.end) return;
     this.lastLane = laneAt(section, interpolateX(before, after, section.end));
     this.previous = section;

@@ -180,6 +180,7 @@ button, kbd { font: inherit; }
 .mountain-notice[data-state='warning'] { background: #704622f5; }
 .mountain-notice[data-state='chasing'] { background: #942738f5; }
 .mountain-notice[data-state='escaped'] { background: #176a59f5; }
+.mountain-notice[data-state='race'] { background: #7e344af5; }
 
 @media (max-width: 700px), (pointer: coarse) {
   .mountain-trail { left: max(16px, var(--safe-left)); top: max(57px, calc(var(--safe-top) + 40px)); }

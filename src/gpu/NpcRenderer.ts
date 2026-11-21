@@ -277,8 +277,15 @@ export class NpcRenderer {
   ): void {
     this.shadowsEnabled.value = disabled.has('npcShadows') ? 0 : 1;
     this.effectsEnabled.value = disabled.has('npcEffects') ? 0 : 1;
-    for (let index = 0; index < MAX_NPCS; index += 1) {
-      const npc = states[index]!;
+    let index = 0;
+    for (const npc of states) {
+      const typeDisabled =
+        (npc.type === 'speed-skier' && disabled.has('npcSpeed')) ||
+        (npc.type === 'beginner-skier' && disabled.has('npcBeginner')) ||
+        (npc.type === 'snowboarder' && disabled.has('npcSnowboard'));
+      const inView = Math.abs(npc.x - cameraX) < viewWidth * 0.54 + 2 &&
+        Math.abs(npc.y - cameraY) < viewHeight * 0.54 + 2;
+      if (!npc.active || !inView || typeDisabled) continue;
       const offset = index * 4;
       this.poseData[offset] = typeIndex(npc.type);
       this.poseData[offset + 1] = npc.carve;
@@ -314,17 +321,13 @@ export class NpcRenderer {
           ? npc.fallTime * 3.6
           : npc.facing * 0.1;
       this.rotation.setFromAxisAngle(this.axis, fallRotation);
-      const typeDisabled =
-        (npc.type === 'speed-skier' && disabled.has('npcSpeed')) ||
-        (npc.type === 'beginner-skier' && disabled.has('npcBeginner')) ||
-        (npc.type === 'snowboarder' && disabled.has('npcSnowboard'));
-      const inView = Math.abs(npc.x - cameraX) < viewWidth * 0.54 + 2 &&
-        Math.abs(npc.y - cameraY) < viewHeight * 0.54 + 2;
-      const visible = npc.active && inView && !typeDisabled ? 1 : 0;
-      this.scale.set(visible, visible, 1);
+      this.scale.set(1, 1, 1);
       this.matrix.compose(this.position, this.rotation, this.scale);
       this.mesh.setMatrixAt(index, this.matrix);
+      index += 1;
     }
+    this.mesh.count = index;
+    if (index === 0) return;
     this.mesh.instanceMatrix.needsUpdate = true;
     this.poseAttribute.needsUpdate = true;
     this.motionAttribute.needsUpdate = true;

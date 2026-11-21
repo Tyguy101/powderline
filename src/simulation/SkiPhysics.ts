@@ -1,5 +1,6 @@
 import type { InputState } from '../input/InputState';
 import type { WorldPosition } from '../core/WorldCoordinates';
+import { BASE_TUCK_SPEED } from '../world/RouteExpansion';
 import {
   createCrashVisualState,
   type CrashReaction,
@@ -70,7 +71,7 @@ export class SkiPhysics {
   private crashAnchorY = 0;
   private collisionCooldown = 0;
 
-  step(delta: number, input: Readonly<InputState>): void {
+  step(delta: number, input: Readonly<InputState>, downhillMultiplier = 1): void {
     const state = this.state;
     this.collisionCooldown = Math.max(0, this.collisionCooldown - delta);
     if (state.crashed) {
@@ -104,13 +105,14 @@ export class SkiPhysics {
     const lateralLimit = input.brake ? 10 : input.tuck ? 11 : 22;
     state.velocityX = Math.max(-lateralLimit, Math.min(lateralLimit, state.velocityX));
 
-    const baseTargetSpeed = input.brake ? 7 : input.tuck ? 34 : 22;
+    const baseTargetSpeed = input.brake ? 7 : (input.tuck ? BASE_TUCK_SPEED : 22) * downhillMultiplier;
     const traversePenalty = Math.abs(state.carve) * (input.tuck ? 0.1 : 0.22);
     const targetSpeed = baseTargetSpeed * (1 - traversePenalty);
     const speedResponse = input.brake ? 4.8 : input.tuck ? 0.95 : 1.15;
+    const speedCap = Math.max(BASE_TUCK_SPEED * downhillMultiplier, state.velocityY);
     state.velocityY +=
       (targetSpeed - state.velocityY) * (1 - Math.exp(-speedResponse * delta));
-    state.velocityY = Math.max(4, Math.min(34, state.velocityY));
+    state.velocityY = Math.max(4, Math.min(speedCap, state.velocityY));
     state.position.x += state.velocityX * delta;
     state.position.y += state.velocityY * delta;
     state.facing += (state.carve * 0.55 - state.facing) * Math.min(1, delta * 6);

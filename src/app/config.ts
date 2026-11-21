@@ -10,6 +10,7 @@ export interface GameConfig {
   readonly rebaseDistance: number;
   readonly quality: QualityPreset;
   readonly developmentMode: boolean;
+  readonly qaTelemetry: boolean;
   readonly cameraTestMode: boolean;
   readonly poseGalleryMode: boolean;
   readonly crashLabMode: boolean;
@@ -66,6 +67,7 @@ export const GAME_CONFIG: GameConfig = {
   maxFrameSeconds: 0.2,
   rebaseDistance: 4096,
   developmentMode,
+  qaTelemetry: developmentMode && query.has('qaTelemetry'),
   cameraTestMode: query.has('cameraTest'),
   poseGalleryMode: query.has('poseGallery'),
   crashLabMode: query.has('crashLab'),
@@ -77,7 +79,7 @@ export const GAME_CONFIG: GameConfig = {
     developmentMode && query.get('mobileCamera') === 'legacy' ? 'legacy' : 'landscape',
   replay: replayData ? replay : null,
   replayError: replay !== null && !replayData
-    ? 'This replay is invalid or uses an older mountain layout. Version 6 replays play on the original Endless Mountain branch.'
+    ? 'This replay is invalid or uses an older mountain layout. Open v7 on codex/mountain-trail-pass or v6 on codex/endless-mountain.'
     : null,
   mountain: classic ? null : replayData?.mountain ?? {
     trail: isTrail(requestedTrail) ? requestedTrail : 'pine',

@@ -358,7 +358,7 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
     const names = await signs.allTextContents();
     assert(names.some((name) => name.includes('↙Gate Run')) &&
       names.some((name) => name.includes('↓Pine Glades')) &&
-      names.some((name) => name.includes('↘Pine Glades')),
+      names.some((name) => name.includes('↘Sun Bowl')),
     `${profile.name}: destination names and arrows are missing in ${label} orientation.`);
     const trail = await page.getByRole('region', { name: 'Current trail' }).boundingBox();
     const pause = await page.locator('.mobile-pause').boundingBox();
