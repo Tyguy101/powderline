@@ -70,12 +70,20 @@ Run. Read the overhead sign and the three destination banners, then ski
 through one of the signed entrances to choose it. After a crash, **Retry Section** restores the latest
 section entrance and **Restart at the Top** starts a fresh Pine Glades descent.
 
-Targeted local checks support `?seed=1729&section=chute&scenario=encounter` and
-`?seed=1729&section=pine&scenario=fork`. Section IDs are `pine`, `gate`, `air`,
-`chute`, and `avalanche`. The start scenarios are `summit`, `encounter`, and
-`fork`. Use `?quality=potato` for the reduced preset and `?debug=1` for F3 metrics.
-Append a saved recording to `/#replay=`. This trail build writes v7 recordings.
-Earlier v6 mountain recordings play on `codex/endless-mountain`. Classic v5 is supported in both branches.
+For the five expansion routes on seed 1729, take **right → left → left → left →
+right → right** for Sun Bowl, Patrol Road, Down Hill Speed Run, Falling Ice
+and Rolling Boulders, Busy Weekend, and a return to Sun Bowl.
+
+Direct starts use `?seed=1729&section=sun&scenario=encounter`. Section IDs are
+`pine`, `gate`, `air`, `chute`, `avalanche`, `sun`, `patrol`, `busy`, `speed`,
+and `hazards`. Use `summit`, `encounter`, or `fork` to pick a starting point.
+The hazards route also supports `ice` and `boulder` for its individual
+introductions. Use `quality=potato` for the reduced preset and `debug=1` for F3 metrics.
+
+Append a saved recording to `/#replay=`. This build writes v8. Mountain v7
+recordings play on `codex/mountain-trail-pass`, and v6 recordings play on
+`codex/endless-mountain`. Classic v5 still plays. See the
+[QA handoff](./docs/QA_HANDOFF.md) for direct starts, footage, and test commands.
 
 ## Production
 

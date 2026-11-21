@@ -1,5 +1,140 @@
 # Powderline QA handoff
 
+## Endless Mountain route expansion
+
+Local branch `codex/route-expansion`. Gameplay commit `71e43fb`.
+Starting checkout `ba21fc8` recorded gameplay build `a488a2b6` before changes. Run
+`npm run dev -- --host 127.0.0.1` and start from the
+[seed 1729 summit](http://localhost:5173/?seed=1729).
+Take **right → left → left → left → right → right** for Sun Bowl,
+Patrol Road, Down Hill Speed Run, Falling Ice and Rolling Boulders,
+Busy Weekend, and a return to Sun Bowl. Patrol Road's green **PATROL SPLIT**
+boards identify internal lines. Named destination boards identify section exits.
+
+| Section | Direct start | Seed 1729 evidence |
+| --- | --- | --- |
+| Sun Bowl | [Ridge approach](http://localhost:5173/?seed=1729&section=sun&scenario=encounter) | [Reveal](../tools/reports/route-expansion/sun-reveal.png), [long carve](../tools/reports/route-expansion/sun-long-carve.png), [replay](../tools/reports/route-expansion/sun-long-carve.replay.txt) |
+| Patrol Road | [First internal fork](http://localhost:5173/?seed=1729&section=patrol&scenario=encounter) | [Approach](../tools/reports/route-expansion/patrol-tight-approach.png), [tight merge](../tools/reports/route-expansion/patrol-tight-merge.png), [wide merge](../tools/reports/route-expansion/patrol-wide-merge.png), [tight replay](../tools/reports/route-expansion/patrol-tight-merge.replay.txt), [wide replay](../tools/reports/route-expansion/patrol-wide-merge.replay.txt) |
+| Busy Weekend | [Bowl entrance](http://localhost:5173/?seed=1729&section=busy&scenario=encounter) | [Moving gap](../tools/reports/route-expansion/busy-moving-gap.png), [wide bypass](../tools/reports/route-expansion/busy-wide-bypass.png), [gap replay](../tools/reports/route-expansion/busy-pass.replay.txt), [potato gap](../tools/reports/route-expansion/busy-moving-gap-potato.png) |
+| Down Hill Speed Run | [Start banner](http://localhost:5173/?seed=1729&section=speed&scenario=encounter) | [Clean finish](../tools/reports/route-expansion/speed-clean-finish.png), [missed flags](../tools/reports/route-expansion/speed-missed-flags.png), [finish replay](../tools/reports/route-expansion/speed-clean-finish.replay.txt) |
+| Falling Ice and Rolling Boulders | [First combined encounter](http://localhost:5173/?seed=1729&section=hazards&scenario=encounter), [ice intro](http://localhost:5173/?seed=1729&section=hazards&scenario=ice), [boulder intro](http://localhost:5173/?seed=1729&section=hazards&scenario=boulder) | [Shadow and boulder](../tools/reports/route-expansion/hazards-shadow-and-rock.png), [potato shadow](../tools/reports/route-expansion/hazards-shadow-and-rock-potato.png), [three clears replay](../tools/reports/route-expansion/hazards-three-clear.replay.txt), [boulder crash](../tools/reports/route-expansion/hazards-straight-tuck-caught.png), [late ice crash](../tools/reports/route-expansion/hazards-late-ice-hit.png), [overlap crash](../tools/reports/route-expansion/hazards-combined-crash.png), [successful retry](../tools/reports/route-expansion/hazards-successful-retry.png) |
+
+Append the contents of a `.replay.txt` to `http://localhost:5173/#replay=`.
+This build writes v8. Open v7 on `codex/mountain-trail-pass` and v6 on
+`codex/endless-mountain`. Classic v5 still plays.
+
+### Tuning and test scope
+
+- Sun Bowl and Busy Weekend share the reveal, light, and open width. Sun Bowl
+  puts its local rider on the shoulder. Busy Weekend staggers groups by
+  position and speed, opens gaps between groups, and spawns new groups at
+  least 95 m ahead. Try the moving gap and the lower-risk outer line.
+- Patrol Road sweeps both sides and their merge with the standard steering
+  curve across 24 seeds. The tight branch rewards early braking. The wide
+  branch supports a longer, steadier turn.
+- Speed Run applies 22 → 33 m/s downhill and 34 → 51 m/s tucked as targets
+  between the banners. Braking remains capped at the ordinary target and
+  overspeed decays after the finish. A miss or out-of-bounds banner crossing
+  invalidates the clean time. Skiing continues through the rest of the route.
+- Boulders run at 36.4 m/s against the 34 m/s sustained tuck, a 2.4 m/s
+  (7.1%) margin. The warning uses projected arrival at the skier's entry
+  speed. Higher lateral strikes leave an outside shoulder wide enough to
+  clear the ice radius. The 60 Hz sweep samples 36 combinations of 12 seeds
+  and three crossings. For the tightest tested outside escape, seed 198 at
+  crossing 3, the shadow-to-impact lead was 1.51 s. Starting the carve 0.30 s
+  after the shadow still cleared at 33.7 m/s, with 5.04 m outside the rolling
+  collision radius. The next tested delay, 0.35 s, failed. This setup entered
+  2.3 m to the outside of the marked center while still inside the impact
+  footprint. The other line is the earlier cross to the center or opposite
+  side. Adjust the warning lead if that last-second margin feels too strict
+  on a controller or touch screen.
+
+### Verification
+
+The regular-control seed 1729 [tour](../tools/reports/route-expansion/tour.json)
+covered 8.74 km and all six signed transitions. It ran all ten Speed Run
+flags cleanly and cleared the solo and three combined hazard sequences.
+Two sections were retained at each boundary. Sampled JS heap stayed between
+28.9 and 33.4 MiB. On potato, the
+[recording](../tools/reports/route-expansion/tour-5-commit.replay.txt) reached
+the same seed, section ID, exit lane, and section count. The real-time
+Speed Run replay also reproduced the clean 28.791 s result with zero misses
+on potato. The straight tuck missed seven flags and invalidated its time.
+The ordinary exit returned to 22.07 m/s. A separate automated test cleared
+every flag after crossing outside START and verified that the time was
+invalid. The hazard test recorded the straight-tuck boulder crash, a late
+ice crash, and a retry after hitting ice with both hazards active.
+
+Chrome emulation passed lifecycle checks on four viewport profiles, with
+a native two-touch tuck into the [Sun Bowl fork](../tools/reports/mobile-lifecycle/narrow-landscape-fork-tuck.png)
+above 30 m/s. The narrow layout showed both Patrol Road labels and both
+internal branches cleared to the merge with desktop drag events in the
+emulated viewport. See the
+[narrow Patrol capture](../tools/reports/route-expansion/patrol-tight-approach-mobile.png)
+and [native touch results](../tools/reports/mobile-lifecycle/results.json).
+
+### Production-preview performance
+
+Local headless Chrome 157 used the default WebGPU backend and DPR 1. The
+matched repeat rebuilt the baseline from `ba21fc8` and used ordinary carving
+input on seed 424242 for five seconds. The occupied route windows used
+seed 1729 and two seconds of replay.
+
+| Profile | Canvas pixels | Frame p50 / p95 / p99, ms | Frames >33.34 / >50 ms | Simulation / render preparation / CPU submission, ms |
+| --- | ---: | --- | --- | --- |
+| [Desktop baseline](../tools/reports/expansion-baseline-repeat-1440x900-dpr1.json) | 998,560 | 16.70 / 16.90 / 17.00 | 0 / 0 | 0.213 / 0.060 / 0.885 |
+| [Desktop expansion](../tools/reports/expansion-after-repeat-1440x900-dpr1.json) | 998,560 | 16.70 / 16.90 / 17.00 | 0 / 0 | 0.227 / 0.070 / 1.130 |
+| [Potato baseline](../tools/reports/expansion-baseline-repeat-potato-1280x720-dpr1.json) | 921,600 | 16.70 / 16.90 / 17.00 | 0 / 0 | 0.169 / 0.070 / 0.917 |
+| [Potato expansion](../tools/reports/expansion-after-repeat-potato-1280x720-dpr1.json) | 921,600 | 16.70 / 16.80 / 16.90 | 0 / 0 | 0.182 / 0.061 / 0.969 |
+| [Busy Weekend peak](../tools/reports/expansion-peak-busy-1440x900-dpr1.json) | 998,560 | 16.70 / 16.90 / 17.00 | 0 / 0 | 0.548 / 0.158 / 3.525 |
+| [Busy Weekend potato peak](../tools/reports/expansion-peak-busy-potato-1280x720-dpr1.json) | 921,600 | 16.70 / 16.80 / 16.80 | 0 / 0 | 0.442 / 0.121 / 2.710 |
+| [Combined hazards overlap](../tools/reports/expansion-peak-combined-1440x900-dpr1.json) | 998,560 | 16.70 / 17.00 / 17.20 | 0 / 0 | 0.762 / 0.404 / 4.659 |
+
+Busy Weekend drew up to 9 riders out of 16 active on desktop and 7 out
+of 10 on potato. NPC render preparation averaged 0.035 and 0.021 ms
+respectively. The overlap sample contained 123 animation-frame callbacks with
+one boulder and one ice strike active. The [eight-profile matrix](../tools/reports/performance-matrix.json)
+passed all budgets. A desktop sample recorded with another browser playtest
+running reached 33.3 ms p95 and 50 ms p99. The isolated repeats returned to the
+baseline frame-time band. Desktop CPU submission in the matched repeat rose
+by 0.245 ms.
+
+Lint, all 51 tests, and the production build passed. Vite emitted its
+bundle-size advisory.
+
+### Reproduce the evidence
+
+```powershell
+npm run lint
+npm test
+npm run build
+npm run qa:expansion -- --focus=sun
+npm run qa:expansion -- --focus=patrol
+npm run qa:expansion -- --focus=busy
+npm run qa:expansion -- --focus=busy --potato
+npm run qa:expansion -- --focus=speed
+npm run qa:expansion -- --focus=hazards
+npm run qa:expansion -- --focus=hazards --potato
+npm run qa:expansion -- --focus=patrol --mobile
+npm run qa:expansion -- --tour
+npm run qa:expansion -- --replay
+npx tsx tools/qa/expansion-tuning.ts
+npm run qa:mobile
+npm run benchmark:matrix
+npm run benchmark -- --scenario=expansion-after --duration=5
+npm run benchmark:potato -- --scenario=expansion-after-potato --duration=5
+npm run benchmark -- --scenario=expansion-peak-busy --seed=1729 --section=busy --drive=coast --replay-file=tools/reports/route-expansion/busy-pass.replay.txt --crowd=16 --duration=2
+npm run benchmark:potato -- --scenario=expansion-peak-busy-potato --seed=1729 --section=busy --drive=coast --replay-file=tools/reports/route-expansion/busy-pass-potato.replay.txt --crowd=10 --duration=2
+npm run benchmark -- --scenario=expansion-peak-combined --seed=1729 --section=hazards --drive=coast --combined=true --replay-file=tools/reports/route-expansion/hazards-three-clear.replay.txt --duration=2
+```
+
+The encounter runs send ordinary browser inputs at real-time speed. The
+long tour and its replay accelerate the browser clock while keeping 60 Hz
+simulation rules. Chrome mobile emulation covers narrow layouts, rotation,
+and native touch controls in `qa:mobile`. Visual review uses the captured
+game frames. Human hands-on testing and physical-device testing remain
+unverified.
+
 ## Mountain trail pass
 
 Local branch `codex/mountain-trail-pass`. The comparison build is

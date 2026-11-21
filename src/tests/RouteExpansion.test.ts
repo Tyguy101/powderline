@@ -104,6 +104,16 @@ describe('route expansion', () => {
     expect(attempt.run.expansion.flagMisses).toBeGreaterThan(0);
   });
 
+  it('invalidates a start outside the banner even if every flag is clear', () => {
+    const attempt = ride(1729, { trail: 'speed', scenario: 'encounter' }, (ski, run) => {
+      const flag = run.section.expansion.timed!.flags[run.expansion.flagIndex];
+      if (run.expansion.timer === 'waiting') return steer(ski, 26, 'brake');
+      return steer(ski, flag ? flag.x + flag.passSide * 5.8 : 0);
+    }, (_ski, run) => run.expansion.timer === 'finished');
+    expect(attempt.run.expansion.flagMisses).toBe(0);
+    expect(attempt.run.expansion.outsideCourse).toBe(true);
+  });
+
   it('keeps the crowd bounded with an offscreen spawn lead on both quality presets', () => {
     for (const [population, limit] of [[5, 16], [3, 10]] as const) {
       const run = new MountainRun(1729, { trail: 'busy', scenario: 'encounter' });

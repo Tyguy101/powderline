@@ -29,12 +29,17 @@ shelters come from the same descriptors used by simulation and rendering.
 
 At a live section crossing, the game stores one skier, NPC, and replay cursor
 checkpoint. Retrying restores that checkpoint and the committed gate total,
-then replays new input from that point. Version 7 replay links include the seed,
+then replays new input from that point. Version 8 replay links include the seed,
 initial section/scenario, relevant simulation options, and 60 Hz inputs.
 World transitions are derived from those inputs. New links store recordings
 in the URL fragment so long runs load without a lengthy request URL.
 Version 5 links select the classic continuous field. Version 6 mountain links
 belong to the original Endless Mountain rules on `codex/endless-mountain`.
+Version 7 links play on `codex/mountain-trail-pass`. The expansion keeps its
+road medians, timed lines, and hazard footprints in seeded section descriptors
+shared by rendering and simulation. One boulder and one ice strike can be
+live at a time. Busy Weekend uses at most 16 pooled riders, or 10 at potato
+and low quality, with an instanced draw culled to the viewport.
 The mountain reports when its 16,000 input-run
 recording buffer fills, while the descent itself continues.
 
