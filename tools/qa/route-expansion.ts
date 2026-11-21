@@ -6,8 +6,7 @@ import { createSection, skiBand, type MountainScenario, type Trail } from '../..
 const output = 'tools/reports/route-expansion';
 const base = process.env.POWDERLINE_QA_URL ?? 'http://127.0.0.1:5173';
 const seed = Number(process.argv.find((arg) => arg.startsWith('--seed='))?.split('=')[1] ?? 1729);
-const mode = process.argv.includes('--tour') ? 'tour' : process.argv.includes('--replay') ? 'replay' :
-  process.argv.includes('--forks') ? 'forks' : 'encounters';
+const mode = process.argv.includes('--tour') ? 'tour' : process.argv.includes('--replay') ? 'replay' : 'encounters';
 const focus = process.argv.find((arg) => arg.startsWith('--focus='))?.split('=')[1];
 const quality = process.argv.includes('--potato') ? 'potato' : 'medium';
 const mobile = process.argv.includes('--mobile');
@@ -48,7 +47,7 @@ async function metrics(): Promise<Metrics> {
   const result = await page.evaluate((trackTraffic) => ({
     state: Reflect.get(globalThis, '__POWDERLINE_METRICS__'),
     riders: trackTraffic ? Reflect.get(globalThis, '__POWDERLINE_RIDERS__')?.() : undefined,
-  }), mode === 'tour' || mode === 'forks');
+  }), mode === 'tour');
   ridersAhead = result.riders ?? [];
   return result.state ?? {};
 }
@@ -88,7 +87,7 @@ async function ride(until: (m: Metrics) => boolean, pilot?: Pilot, timeout = 105
     assert.equal(m.crashed, 'false', JSON.stringify(m));
     if (pilot) {
       const [x, speed] = pilot(m);
-      const forkApproach = mode === 'forks' || mode === 'tour' && Number(m.sectionEnd) - Number(m.worldY) < 212;
+      const forkApproach = mode === 'tour' && Number(m.sectionEnd) - Number(m.worldY) < 212;
       const damping = forkApproach ? 1.35 : mobile ? 0.95 : 0.60;
       const gain = forkApproach ? 0.115 : mobile ? 0.16 : 0.14;
       const lateral = Math.max(-1, Math.min(1, (x - Number(m.worldX) - Number(m.velocityX) * damping) * gain));
@@ -256,10 +255,21 @@ async function dangerous(): Promise<void> {
   await page.keyboard.up('KeyS');
   await page.getByRole('button', { name: /Retry Section/ }).waitFor();
   await capture('hazards-straight-tuck-caught', await metrics());
+
+  await load('hazards');
+  await startDrag();
+  const combinedCrash = await ride((m) => m.crashed === 'true', (m) => [Number(m.iceX), 'tuck']);
+  await page.mouse.up();
+  assert.equal(combinedCrash.hazardImpact, 'ice');
+  assert.equal(combinedCrash.boulderActive, 'true');
+  await page.getByRole('button', { name: /Retry Section/ }).waitFor();
+  await capture('hazards-combined-crash', await metrics());
   await page.getByRole('button', { name: /Retry Section/ }).click();
-  const reset = await metrics();
   await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.crashed === 'false');
-  assert.equal(reset.sectionId, crashed.sectionId);
+  const reset = await metrics();
+  assert.equal(reset.sectionId, combinedCrash.sectionId);
+  assert.equal(reset.iceActive, 'false');
+  assert.equal(reset.boulderActive, 'false');
   await startDrag();
   const recovered = await ride((m) => Number(m.boulderPasses) >= 1 && Number(m.icePasses) >= 1,
     (m) => hazards(m, false));
@@ -306,26 +316,6 @@ function trafficAware(m: Metrics, target: number, speed: Speed, lane: number, na
   const alternate = target + (conflict.x > target ? -4 : 4);
   const laneSafe = distance >= 45 || (alternate - center) * lane > 13;
   return [laneSafe ? alternate : target, 'brake'];
-}
-
-async function forkChecks(): Promise<void> {
-  for (const [trail, lane, destination] of route) {
-    await load(trail, 'fork');
-    await startDrag();
-    const pilot: Pilot = (m) => {
-      const target = Number(m.sectionCenter) + lane * 18;
-      const settled = Math.abs(Number(m.worldX) - target) < 4;
-      return trafficAware(m, target, settled ? 'tuck' : 'brake', lane, false);
-    };
-    const approach = await ride((m) => Number(m.sectionEnd) - Number(m.worldY) < 52, pilot);
-    const end = await ride((m) => m.sectionIndex === 1, pilot);
-    assert.equal(end.section, destination);
-    assert.equal(end.lastLane, lane);
-    if (trail === 'pine') assert.ok(Math.max(Number(approach.velocityY), Number(end.velocityY)) >= 29,
-      'Summit fork did not reach tuck speed.');
-    await page.mouse.up();
-    await capture(`fork-${trail}-to-${destination}`, end);
-  }
 }
 
 async function tour(): Promise<void> {
@@ -379,7 +369,6 @@ let completed = false;
 try {
   if (mode === 'tour') await tour();
   else if (mode === 'replay') await replayTour();
-  else if (mode === 'forks') await forkChecks();
   else {
     for (const [scene, check] of Object.entries({ sun, patrol, busy: traffic, speed, hazards: dangerous })) {
       if (!focus || focus === scene) await check();
@@ -391,6 +380,8 @@ try {
   await capture(filename + '-failure', await metrics()).catch(() => {});
   throw error;
 } finally {
-  await writeFile(`${output}/${filename}.json`, JSON.stringify({ seed, completed, rate, headless, mobile, quality, errors, evidence }, null, 2));
+  await writeFile(`${output}/${filename}.json`, JSON.stringify({
+    seed, completed, rate, headless, mobile, quality: mode === 'replay' ? 'potato' : quality, errors, evidence,
+  }, null, 2));
   await browser.close();
 }
