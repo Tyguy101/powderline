@@ -294,7 +294,7 @@ export class InputManager {
     if (event.pointerType === 'touch' && this.mobileTouchScheme === 'split') {
       if (this.steeringTouchId !== null) return;
       const bounds = this.surface.getBoundingClientRect();
-      if (event.clientX > bounds.left + bounds.width * 0.7) return;
+      if (event.clientX < bounds.left + bounds.width * 0.3) return;
       this.steeringTouchId = event.pointerId;
       this.steeringOriginX = event.clientX;
       this.steeringOriginY = event.clientY;

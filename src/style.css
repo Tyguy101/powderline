@@ -34,7 +34,7 @@ button:focus-visible { outline: 3px solid #114b66; outline-offset: 3px; }
 }
 .mobile-pause svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; }
 .touch-actions {
-  position: fixed; z-index: 5; right: calc(var(--safe-right) + 16px);
+  position: fixed; z-index: 5; left: calc(var(--safe-left) + 16px);
   bottom: calc(var(--safe-bottom) + clamp(18px, 4dvh, 34px));
   display: none; gap: 9px; pointer-events: none;
 }
@@ -57,17 +57,9 @@ button:focus-visible { outline: 3px solid #114b66; outline-offset: 3px; }
   background: #173b49; color: #fff; box-shadow: 0 2px 10px #183d4b29;
   font-size: 13px; font-weight: 760; line-height: 1.18; pointer-events: none;
 }
-.run-cue[hidden], .run-cue button[hidden], .pause-card [hidden] { display: none; }
+.run-cue[hidden], .pause-card [hidden] { display: none; }
 .run-cue[data-tone='warning'] { background: #593628; }
 .run-cue[data-tone='clock'] { font-variant-numeric: tabular-nums; }
-.run-cue[data-tone='hint'] {
-  padding: 0 0 0 10px; background: #f6fcfc; color: #10313a; border-color: #9bb5bb;
-}
-.run-cue button {
-  width: 44px; min-width: 44px; height: 44px; border: 0; border-radius: 10px;
-  background: transparent; color: inherit; font-size: 19px; cursor: pointer; pointer-events: auto;
-}
-
 .touch-debug { position: fixed; z-index: 4; inset: 0; display: none; pointer-events: none; }
 .touch-debug.visible { display: block; }
 .touch-debug i, .touch-debug b { position: absolute; left: 0; top: 0; transform-origin: 0 50%; }
@@ -88,6 +80,9 @@ button:focus-visible { outline: 3px solid #114b66; outline-offset: 3px; }
   color: #10313a; background: #f6fcfc; box-shadow: 0 16px 54px #0d2d3452;
   overflow: auto; overscroll-behavior: contain; touch-action: pan-y;
 }
+.pause-overlay[data-resume-only] { width: min(300px, calc(100vw - var(--safe-left) - var(--safe-right) - 28px)); }
+.pause-overlay[data-resume-only] .pause-card { display: block; }
+.pause-overlay[data-resume-only] :is(.pause-run, .pause-controls, .pause-build) { display: none; }
 .pause-overlay::backdrop, .crash-overlay::backdrop { background: #12354050; }
 .pause-card, .crash-card { padding: clamp(16px, 4.6vw, 26px); }
 .pause-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -231,7 +226,7 @@ button:focus-visible { outline: 3px solid #114b66; outline-offset: 3px; }
   .touch-actions { display: grid; }
 }
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 460px) {
-  .touch-actions { right: calc(var(--safe-right) + 14px); bottom: calc(var(--safe-bottom) + 16px); }
+  .touch-actions { left: calc(var(--safe-left) + 14px); bottom: calc(var(--safe-bottom) + 16px); }
   .touch-action { width: 62px; height: 48px; }
 }
 @media (orientation: landscape) and (max-height: 480px) {

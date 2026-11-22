@@ -12,17 +12,10 @@ export interface RunCue {
   tone: 'warning' | 'race' | 'clock';
 }
 
-const INTRO_KEY = 'powderline.steering-hint-seen';
-
-function hasSeenHint(): boolean {
-  try { return localStorage.getItem(INTRO_KEY) === '1'; } catch { return false; }
-}
-
 export class HUD {
   private readonly debug: HTMLElement;
   private readonly cue: HTMLElement;
   private readonly cueText: HTMLElement;
-  private readonly dismiss: HTMLButtonElement;
   private readonly pauseOverlay: HTMLDialogElement;
   private readonly pauseButton: HTMLButtonElement;
   private readonly brakeButton: HTMLButtonElement;
@@ -32,24 +25,18 @@ export class HUD {
   private readonly touchDebugCurrent: HTMLElement;
   private readonly touchDebugVector: HTMLElement;
   private inputMethod: InputMethod = navigator.maxTouchPoints > 0 ? 'touch' : 'keyboard';
-  private hintPending: boolean;
-  private hintStart = 0;
   private debugCountdown = 0;
   private debugVisible = new URLSearchParams(location.search).has('debug');
   private currentTone = '';
 
   constructor(root: HTMLElement, private readonly config: GameConfig, onPauseToggle: () => void) {
-    this.hintPending = !config.replay && !config.cameraTestMode &&
-      (!config.mountain || config.mountain.scenario === 'summit') && !hasSeenHint();
     root.classList.toggle('touch-controls-legacy', config.mobileTouchScheme === 'drag');
     root.insertAdjacentHTML(
       'beforeend',
       `<button class="mobile-pause" type="button" aria-label="Pause game" title="Pause game">
         <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4v12M14 4v12"/></svg>
       </button>
-      <div class="run-cue" hidden><span data-run-cue></span>
-        <button type="button" aria-label="Dismiss steering hint" hidden>×</button>
-      </div>
+      <div class="run-cue" hidden><span data-run-cue></span></div>
       <div class="touch-actions" aria-label="Touch speed controls">
         <button class="touch-action touch-action--brake" type="button">Brake</button>
         <button class="touch-action touch-action--tuck" type="button">Tuck</button>
@@ -77,8 +64,8 @@ export class HUD {
               <button type="button" data-control="gamepad">Controller</button>
             </div>
             <dl data-reference="touch">
-              <div><dt>Carve</dt><dd>${config.mobileTouchScheme === 'split' ? 'Drag with your left thumb' : 'Drag sideways'}</dd></div>
-              <div><dt>Slow or tuck</dt><dd>${config.mobileTouchScheme === 'split' ? 'Hold Brake or Tuck with your right thumb' : 'Drag up to brake or down to tuck'}</dd></div>
+              <div><dt>Carve</dt><dd>${config.mobileTouchScheme === 'split' ? 'Drag with your right thumb' : 'Drag sideways'}</dd></div>
+              <div><dt>Slow or tuck</dt><dd>${config.mobileTouchScheme === 'split' ? 'Hold Brake or Tuck with your left thumb' : 'Drag up to brake or down to tuck'}</dd></div>
               <div><dt>Pause</dt><dd>Pause icon</dd></div>
             </dl>
             <dl data-reference="keyboard">
@@ -103,7 +90,6 @@ export class HUD {
     this.debug = root.querySelector('#debug')!;
     this.cue = root.querySelector('.run-cue')!;
     this.cueText = root.querySelector('[data-run-cue]')!;
-    this.dismiss = this.cue.querySelector('button')!;
     this.pauseOverlay = root.querySelector('.pause-overlay')!;
     this.pauseButton = root.querySelector('.mobile-pause')!;
     this.brakeButton = root.querySelector('.touch-action--brake')!;
@@ -115,10 +101,6 @@ export class HUD {
     this.pauseButton.addEventListener('click', onPauseToggle);
     this.pauseOverlay.querySelector('[data-resume]')!.addEventListener('click', onPauseToggle);
     this.pauseOverlay.addEventListener('cancel', (event) => event.preventDefault());
-    this.dismiss.addEventListener('click', () => {
-      this.dismissHint();
-      this.cue.hidden = true;
-    });
     for (const button of this.pauseOverlay.querySelectorAll<HTMLButtonElement>('[data-control]')) {
       button.addEventListener('click', () => this.showReference(button.dataset.control!));
     }
@@ -137,47 +119,26 @@ export class HUD {
     this.inputMethod = method;
   }
 
-  dismissHint(): void {
-    if (!this.hintPending) return;
-    this.hintPending = false;
-    try { localStorage.setItem(INTRO_KEY, '1'); } catch { /* In-memory dismissal still applies. */ }
-  }
-
-  updateCue(encounter: RunCue | null, steer: number, inactive: boolean): void {
-    if (this.hintPending && this.hintStart === 0 && !inactive) {
-      this.hintStart = performance.now();
-      try { localStorage.setItem(INTRO_KEY, '1'); } catch { /* In-memory dismissal still applies. */ }
-    }
-    if (this.hintPending && (Math.abs(steer) >= 0.26 || encounter || inactive ||
-        (this.hintStart > 0 && performance.now() - this.hintStart >= 4200))) this.dismissHint();
-    const hint = !inactive && !encounter && this.hintPending;
-    const tone = inactive ? '' : encounter?.tone ?? (hint ? 'hint' : '');
+  updateCue(encounter: RunCue | null): void {
+    const tone = encounter?.tone ?? '';
     if (tone !== this.currentTone) {
       this.currentTone = tone;
       this.cue.hidden = !tone;
       this.cue.dataset.tone = tone;
-      this.dismiss.hidden = !hint;
       this.cueText.setAttribute('aria-live', tone === 'clock' ? 'off' : 'polite');
     }
-    if (!tone) return;
-    const text = encounter?.text ?? {
-      touch: 'Drag left or right to carve',
-      keyboard: 'Press A or D to carve',
-      pointer: 'Drag sideways to carve',
-      gamepad: 'Tilt the left stick to carve',
-    }[this.inputMethod];
-    if (this.cueText.textContent !== text) this.cueText.textContent = text;
+    if (encounter && this.cueText.textContent !== encounter.text) this.cueText.textContent = encounter.text;
   }
 
-  setPaused(paused: boolean, state: Readonly<SkiState>, run?: MountainRun): void {
+  setPaused(paused: boolean, state: Readonly<SkiState>, run?: MountainRun, resumeOnly = false): void {
     if (paused === this.pauseOverlay.open) return;
     if (!paused) {
       this.pauseOverlay.classList.remove('visible');
       this.pauseOverlay.close();
       return;
     }
-    this.dismissHint();
-    this.updateCue(null, 0, true);
+    this.updateCue(null);
+    this.pauseOverlay.toggleAttribute('data-resume-only', resumeOnly);
     this.showReference(this.inputMethod === 'pointer' ? 'keyboard' : this.inputMethod);
     const trail = run ? TRAILS[run.section.trail] : null;
     this.pauseOverlay.querySelector('[data-pause-trail]')!.textContent = trail?.name ?? 'Classic descent';

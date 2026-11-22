@@ -17,16 +17,18 @@ viewport area available to the page. They exclude native browser chrome.
 
 The downhill HUD has a 44 px Pause target, plus 66 × 52 px Brake and
 Tuck targets in portrait and 62 × 48 px in short landscape. Speed controls
-sit above safe-area insets at the lower right. The active target uses a
+sit above safe-area insets at the lower left. The right-side steering zone
+keeps the steering thumb independent of both speed buttons. The active target uses a
 filled pressed state that follows touch ownership when the speed thumb
 slides between buttons. Pause holds the current trail, descent, speed,
 race result, seed sharing, input reference, and build ID. F3 still opens
 diagnostics. Crash puts Retry Section first and retains replay sharing
 and Restart at the Top.
 
-One corner cue handles the steering hint, race clock and result, and
-urgent hazards. The hint dismisses on an intentional carve, after 4.2 s,
-or via its close button. Repeat descents and retries stay quiet. The race
+The corner cue handles the race clock, race result, and urgent hazards.
+The controls reference opens through Pause. First descents, repeat descents,
+and retries begin without an automatic steering hint. A background or
+focus-loss pause shows Resume without opening the controls reference. The race
 result clears after 3.6 s at most and remains in Pause while on the course.
 World signs show a guide row and then the entrance row without the
 overhead prompt. Both touch modes, replay v8, collision rules, and the

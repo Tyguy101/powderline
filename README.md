@@ -107,10 +107,10 @@ the address to share.
 - `W` / Up Arrow: brake
 - `S` / Down Arrow: speed tuck
 - Mouse drag horizontally: farther displacement produces a sharper carve
-- Touch: place the left thumb anywhere in the left steering zone and move it
+- Touch: place the right thumb anywhere in the right steering zone and move it
   horizontally for analog carving; vertical thumb drift does not change speed
-- Touch: hold the right-side `BRAKE` or `TUCK` control while steering with the
-  left thumb; releasing the button returns to neutral speed input
+- Touch: hold the left-side `BRAKE` or `TUCK` control while steering with the
+  right thumb; releasing the button returns to neutral speed input
 - `R`: retry the current section after a crash
 - `P` / Escape: pause or resume
 - Enter / Space: menu confirmation
@@ -190,8 +190,8 @@ This checkout includes:
 - Pose, camera-scale, collision, crash-laboratory, and NPC-laboratory tools
 - F3 metrics, automated tests, screenshot/capture tools, and desktop/mobile
   Playwright benchmarks
-- Safe-area-aware phone/tablet HUD, touch pause/resume, independent left steering
-  and right action pointer ownership, and predictable background/orientation
+- Safe-area-aware phone/tablet HUD, touch pause/resume, independent right steering
+  and left action pointer ownership, and predictable background/orientation
   recovery without catch-up
 - Player-facing WebGPU startup diagnostics instead of a blank failure screen
 

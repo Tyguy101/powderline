@@ -51,6 +51,13 @@ async function sight(page: Page, phone: boolean) {
   }
 }
 
+async function verifyQuietStart(page: Page) {
+  const unsolicited = page.locator('.run-cue:visible, .pause-controls:visible');
+  assert.equal(await unsolicited.count(), 0);
+  await page.waitForFunction(() => Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.worldY) > 3);
+  assert.equal(await unsolicited.count(), 0);
+}
+
 async function phone() {
   const context = await browser.newContext({ viewport: { width: 390, height: 650 }, deviceScaleFactor: 2,
     isMobile: true, hasTouch: true, permissions: ['clipboard-read', 'clipboard-write'] });
@@ -67,21 +74,22 @@ async function phone() {
   }
   const cue = page.locator('.run-cue');
   await go(page);
-  await cue.getByText('Drag left or right to carve').waitFor();
-  await screenshot(page, 'phone-first-hint');
-  const steer = { id: 1, x: 75, y: 420 };
+  await verifyQuietStart(page);
+  await screenshot(page, 'phone-first-descent');
+  const steer = { id: 1, x: 285, y: 420 };
   const brake = await point('.touch-action--brake', 2);
   const tuck = await point('.touch-action--tuck', 2);
+  assert(brake.x === tuck.x && tuck.x < 85 && tuck.y > 570, 'Speed controls are not lower left.');
   await emit('touchStart', [steer]);
   await emit('touchStart', [steer, brake]);
-  const shifted = { ...steer, x: 126 };
+  const shifted = { ...steer, x: 336 };
   await emit('touchMove', [shifted, brake]);
   await page.waitForFunction(() => {
     const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
     return m?.inputSteer > .25 && m.inputBrake === 'true' && m.inputTuck === 'false';
   });
   await cue.waitFor({ state: 'hidden' });
-  await emit('touchMove', [{ ...steer, x: 46 }, tuck]);
+  await emit('touchMove', [{ ...steer, x: 248 }, tuck]);
   await page.waitForFunction(() => {
     const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
     return m?.inputSteer < -.25 && m.inputBrake === 'false' && m.inputTuck === 'true';
@@ -98,7 +106,9 @@ async function phone() {
   await pause.getByRole('button', { name: 'Resume' }).waitFor();
   assert.equal(await page.evaluate(() => document.activeElement?.textContent), 'Resume');
   await pause.getByText('Pine Glades', { exact: true }).waitFor();
-  assert(await pause.locator('[data-reference="touch"]').isVisible());
+  const touchReference = pause.locator('[data-reference="touch"]');
+  assert(await touchReference.isVisible());
+  assert.match(await touchReference.innerText(), /right thumb[\s\S]*left thumb/);
   await pause.getByRole('button', { name: 'Copy seed 1729' }).tap();
   await pause.getByText('Link copied', { exact: true }).waitFor();
   assert.equal(new URL(await page.evaluate(() => navigator.clipboard.readText())).searchParams.get('seed'), '1729');
@@ -108,8 +118,12 @@ async function phone() {
   await page.waitForTimeout(140);
   assert.equal((await metrics(page)).worldY, paused.worldY, 'Resize advanced paused run');
   await pause.getByRole('button', { name: 'Resume' }).tap();
+  await page.evaluate(() => window.dispatchEvent(new Event('blur')));
+  await pause.getByRole('button', { name: 'Resume' }).waitFor();
+  assert.equal(await page.locator('.pause-controls:visible').count(), 0, 'Focus loss opened the controls reference.');
+  await pause.getByRole('button', { name: 'Resume' }).tap();
   await go(page);
-  await cue.waitFor({ state: 'hidden' });
+  await verifyQuietStart(page);
   results.push({ name: 'mobile-first-repeat-and-pause', build: paused.build, brake, tuck,
     nativeTouch: true, scrollTop: 0, cancelled: true, seedClipboard: true });
 
@@ -135,8 +149,8 @@ async function phone() {
   // be completely visible before the junction requires a lane commitment.
   await page.waitForFunction(() => {
     const list = [...document.querySelectorAll('.trail-destination')].filter((node) => node.getClientRects().length);
-    const right = list.find((board) => board.textContent?.includes('Sun Bowl'))?.getBoundingClientRect();
-    return list.length === 3 && right && right.bottom < document.querySelector('.touch-action--brake')!.getBoundingClientRect().top;
+    const left = list.find((board) => board.textContent?.includes('Gate Run'))?.getBoundingClientRect();
+    return list.length === 3 && left && left.bottom < document.querySelector('.touch-action--brake')!.getBoundingClientRect().top;
   });
   await screenshot(page, 'phone-fork-potato');
   results.push({ name: 'phone-fork', signs: readings.map((board) => board.text) });
@@ -194,12 +208,9 @@ async function desktop() {
   const page = await context.newPage();
   watch(page);
   await go(page);
-  const cue = page.locator('.run-cue');
-  await cue.getByText('Press A or D to carve').waitFor();
-  await page.getByRole('button', { name: 'Dismiss steering hint' }).click();
-  await cue.waitFor({ state: 'hidden' });
+  await verifyQuietStart(page);
   await go(page);
-  await cue.waitFor({ state: 'hidden' });
+  await verifyQuietStart(page);
   assert(!await page.locator('.touch-actions').isVisible());
   await page.keyboard.press('Escape');
   const modal = page.getByRole('dialog', { name: 'Paused' });

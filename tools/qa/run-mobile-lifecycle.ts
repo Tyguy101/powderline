@@ -178,6 +178,7 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
   assert(tuckBox && tuckBox.width >= 44 && tuckBox.height >= 44,
     'Tuck touch target is smaller than 44px.');
   assert(brakeBox.y + brakeBox.height < tuckBox.y, 'Brake and Tuck targets overlap.');
+  assert(brakeBox.x < 64 && tuckBox.x === brakeBox.x, 'Speed controls are not on the left.');
   await pause.click();
   await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.paused === 'true');
   assert(await page.locator('[data-reference="touch"]').isVisible(), 'Pause did not show touch controls.');
@@ -193,6 +194,7 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
   });
   assert(await page.locator('.pause-overlay').evaluate((node) => node.classList.contains('visible')),
     'Backgrounding did not show an explicit resume prompt.');
+  assert(!(await page.locator('.pause-controls').isVisible()), 'Backgrounding opened the controls reference.');
   const hiddenY = (await readSnapshot(page)).worldY;
   await page.waitForTimeout(350);
   await page.evaluate(() => {
@@ -227,7 +229,7 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
       buttons: type === 'pointerup' ? 0 : 1,
     });
   };
-  const originX = canvasBox.x + Math.min(150, canvasBox.width * 0.28);
+  const originX = canvasBox.x + canvasBox.width * 0.68;
   const originY = canvasBox.y + canvasBox.height * 0.56;
   await emitPointer('#game-canvas', 'pointerdown', 41, originX, originY);
   await emitPointer('#game-canvas', 'pointermove', 41, originX + 62, originY + 90);
@@ -376,7 +378,7 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
     const tuck = await page.locator('.touch-action--tuck').boundingBox();
     assert(tuck, 'Missing touch tuck control.');
     const action = { id: 1, x: tuck.x + tuck.width / 2, y: tuck.y + tuck.height / 2 };
-    const steering = { id: 2, x: 81, y: profile.viewport.height * 0.62 };
+    const steering = { id: 2, x: profile.viewport.width - 125, y: profile.viewport.height * 0.62 };
     const emit = (type: 'touchStart' | 'touchMove' | 'touchEnd', points: typeof action[]) =>
       session.send('Input.dispatchTouchEvent', { type, touchPoints: points });
     await emit('touchStart', [action]);

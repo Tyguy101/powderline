@@ -322,7 +322,6 @@ export class Game {
 
   private retrySection(): void {
     this.setPaused(false);
-    this.hud.dismissHint();
     this.input.resetTransientState();
     if (this.mountain && this.checkpoint) {
       this.mountain.retry();
@@ -343,13 +342,13 @@ export class Game {
     this.renderer.clearImpactDebug();
   }
 
-  private setPaused(paused: boolean): void {
+  private setPaused(paused: boolean, resumeOnly = false): void {
     if (paused && this.crashPromptShown) return;
     this.paused = paused;
     this.renderWhilePaused = true;
     if (paused) this.input.resetTransientState();
     else this.loop.resetClock();
-    this.hud.setPaused(paused, this.physics.state, this.mountain);
+    this.hud.setPaused(paused, this.physics.state, this.mountain, resumeOnly);
     // Publish the transition before a lifecycle suspension stops RAF entirely.
     // This keeps diagnostics and automated freeze checks synchronized with the
     // actual fixed-step state instead of the last throttled metrics snapshot.
@@ -361,7 +360,7 @@ export class Game {
 
   private pauseForLifecycle(reason: LifecyclePauseReason): void {
     this.publicMetrics.pauseReason = reason;
-    this.setPaused(true);
+    this.setPaused(true, true);
   }
 
   private triggerLabCrash(settings: {
@@ -447,7 +446,7 @@ export class Game {
     if (!this.paused || this.renderWhilePaused) {
       this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
       const encounter = this.mountainHUD?.update(state) ?? null;
-      this.hud.updateCue(encounter, this.input.state.steer, this.paused || state.crashed);
+      this.hud.updateCue(this.paused ? null : encounter);
       this.renderWhilePaused = false;
     }
     this.metricsPublishCountdown -= 1;
