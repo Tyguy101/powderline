@@ -4,16 +4,26 @@ import type { GameConfig } from '../app/config';
 import { BUILD_ID } from '../app/build';
 import type { NpcMetrics } from '../simulation/NpcSystem';
 import type { InputMethod, TouchActionElements, TouchDiagnostics } from '../input/InputManager';
+import type { MountainRun } from '../simulation/MountainRun';
+import { TRAILS } from '../world/EndlessMountain';
+
+export interface RunCue {
+  text: string;
+  tone: 'warning' | 'race' | 'clock';
+}
+
+const INTRO_KEY = 'powderline.steering-hint-seen';
+
+function hasSeenHint(): boolean {
+  try { return localStorage.getItem(INTRO_KEY) === '1'; } catch { return false; }
+}
 
 export class HUD {
-  private readonly distance: HTMLElement;
-  private readonly speed: HTMLElement;
   private readonly debug: HTMLElement;
-  private readonly keyboardHint: HTMLElement;
-  private readonly controllerHint: HTMLElement;
-  private readonly touchHint: HTMLElement;
-  private readonly controllerToast: HTMLElement;
-  private readonly pauseOverlay: HTMLElement;
+  private readonly cue: HTMLElement;
+  private readonly cueText: HTMLElement;
+  private readonly dismiss: HTMLButtonElement;
+  private readonly pauseOverlay: HTMLDialogElement;
   private readonly pauseButton: HTMLButtonElement;
   private readonly brakeButton: HTMLButtonElement;
   private readonly tuckButton: HTMLButtonElement;
@@ -21,56 +31,79 @@ export class HUD {
   private readonly touchDebugOrigin: HTMLElement;
   private readonly touchDebugCurrent: HTMLElement;
   private readonly touchDebugVector: HTMLElement;
-  private controllerConnected = false;
   private inputMethod: InputMethod = navigator.maxTouchPoints > 0 ? 'touch' : 'keyboard';
-  private toastTimer = 0;
-  private lastDistance = -1;
-  private lastSpeed = -1;
+  private hintPending: boolean;
+  private hintStart = 0;
   private debugCountdown = 0;
   private debugVisible = new URLSearchParams(location.search).has('debug');
+  private currentTone = '';
 
-  constructor(root: HTMLElement, config: GameConfig, onPauseToggle: () => void) {
+  constructor(root: HTMLElement, private readonly config: GameConfig, onPauseToggle: () => void) {
+    this.hintPending = !config.replay && !config.cameraTestMode &&
+      (!config.mountain || config.mountain.scenario === 'summit') && !hasSeenHint();
     root.classList.toggle('touch-controls-legacy', config.mobileTouchScheme === 'drag');
     root.insertAdjacentHTML(
       'beforeend',
-      `<header class="hud" aria-label="Run information">
-        <div class="brand"><span class="brand-mark">P</span><span>POWDERLINE</span></div>
-        <div class="readouts">
-          <div><span class="label">DESCENT</span><strong id="distance">0 m</strong></div>
-          <div><span class="label">SPEED</span><strong id="speed">0 km/h</strong></div>
-        </div>
-      </header>
-      <div class="hint">
-        <span data-keyboard-help><kbd>A</kbd><kbd>D</kbd> carve <i>•</i> <kbd>W</kbd> brake <i>•</i> <kbd>S</kbd> tuck <i>•</i> drag in 8 directions${config.developmentMode ? ' <i>•</i> <kbd>G</kbd> poses' : ''}</span>
-        <span data-touch-help hidden>${config.mobileTouchScheme === 'split'
-          ? 'Left thumb carves <i>•</i> hold BRAKE or TUCK with your right thumb'
-          : 'Drag sideways to carve <i>•</i> up to brake <i>•</i> down to tuck'}</span>
-        <span data-controller-help hidden>Left stick steer/up brake/down tuck <i>•</i> triggers brake/tuck <i>•</i> Menu pause <i>•</i> primary confirm <i>•</i> top face restart</span>
+      `<button class="mobile-pause" type="button" aria-label="Pause game" title="Pause game">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M6 4v12M14 4v12"/></svg>
+      </button>
+      <div class="run-cue" hidden><span data-run-cue></span>
+        <button type="button" aria-label="Dismiss steering hint" hidden>×</button>
       </div>
       <div class="touch-actions" aria-label="Touch speed controls">
-        <button class="touch-action touch-action--brake" type="button"><span>BRAKE</span><small>SLOW / PLOW</small></button>
-        <button class="touch-action touch-action--tuck" type="button"><span>TUCK</span><small>MAX SPEED</small></button>
+        <button class="touch-action touch-action--brake" type="button">Brake</button>
+        <button class="touch-action touch-action--tuck" type="button">Tuck</button>
       </div>
       <div class="touch-debug${config.touchDebugMode ? ' visible' : ''}" aria-hidden="true">
         <i data-touch-origin></i><i data-touch-current></i><b data-touch-vector></b>
       </div>
-      <button class="mobile-pause" type="button" aria-label="Pause game">Pause</button>
-      <div class="controller-toast" role="status" aria-live="polite"></div>
-      <section class="pause-overlay" aria-label="Game paused">
-        <div><span>PAUSED</span><strong>Fresh tracks, whenever you are.</strong>
-        <p>Use the button below, a controller confirm, <kbd>P</kbd>, or <kbd>Esc</kbd> to continue.</p>
-        <button data-resume type="button">Continue run</button></div>
-      </section>
-      <aside id="debug" class="debug" aria-live="polite"></aside>
-      <div class="status-chip"><i></i> WEBGPU PROCEDURAL <span>BUILD ${BUILD_ID}</span></div>`,
+      <dialog class="pause-overlay" aria-labelledby="pause-title">
+        <div class="pause-card">
+          <header class="pause-header"><h1 id="pause-title">Paused</h1><button class="resume" data-resume type="button" autofocus>Resume</button></header>
+          <section class="pause-run" aria-label="Current trail">
+            <h2 data-pause-trail></h2>
+            <p data-pause-details></p>
+            <dl><div><dt>Descent</dt><dd data-pause-distance></dd></div>
+              <div><dt>Speed</dt><dd data-pause-speed></dd></div>
+              <div data-pause-race hidden><dt>Race</dt><dd></dd></div></dl>
+            <button class="seed-share" type="button" data-seed></button>
+            <span data-seed-status role="status"></span>
+          </section>
+          <section class="pause-controls" aria-labelledby="controls-title">
+            <h2 id="controls-title">Controls</h2>
+            <div role="group" aria-label="Input method">
+              <button type="button" data-control="touch">Touch</button>
+              <button type="button" data-control="keyboard">Keyboard &amp; mouse</button>
+              <button type="button" data-control="gamepad">Controller</button>
+            </div>
+            <dl data-reference="touch">
+              <div><dt>Carve</dt><dd>${config.mobileTouchScheme === 'split' ? 'Drag with your left thumb' : 'Drag sideways'}</dd></div>
+              <div><dt>Slow or tuck</dt><dd>${config.mobileTouchScheme === 'split' ? 'Hold Brake or Tuck with your right thumb' : 'Drag up to brake or down to tuck'}</dd></div>
+              <div><dt>Pause</dt><dd>Pause icon</dd></div>
+            </dl>
+            <dl data-reference="keyboard">
+              <div><dt>Carve</dt><dd>A / D or ← / →</dd></div>
+              <div><dt>Brake / tuck</dt><dd>W / S or ↑ / ↓</dd></div>
+              <div><dt>Mouse</dt><dd>Drag sideways to carve, up to brake, down to tuck</dd></div>
+              <div><dt>Pause / retry</dt><dd>P or Esc / R</dd></div>
+              <div><dt>Diagnostics</dt><dd>F3${config.developmentMode ? ' · G for poses' : ''}</dd></div>
+            </dl>
+            <dl data-reference="gamepad">
+              <div><dt>Carve</dt><dd>Left stick sideways</dd></div>
+              <div><dt>Brake / tuck</dt><dd>Left / right trigger or bumper, or stick up / down</dd></div>
+              <div><dt>Pause / resume</dt><dd>Menu / primary face button</dd></div>
+              <div><dt>Retry</dt><dd>Top face button</dd></div>
+            </dl>
+          </section>
+          <small class="pause-build">Build ${BUILD_ID}</small>
+        </div>
+      </dialog>
+      <aside id="debug" class="debug"></aside>`,
     );
-    this.distance = root.querySelector('#distance')!;
-    this.speed = root.querySelector('#speed')!;
     this.debug = root.querySelector('#debug')!;
-    this.keyboardHint = root.querySelector('[data-keyboard-help]')!;
-    this.touchHint = root.querySelector('[data-touch-help]')!;
-    this.controllerHint = root.querySelector('[data-controller-help]')!;
-    this.controllerToast = root.querySelector('.controller-toast')!;
+    this.cue = root.querySelector('.run-cue')!;
+    this.cueText = root.querySelector('[data-run-cue]')!;
+    this.dismiss = this.cue.querySelector('button')!;
     this.pauseOverlay = root.querySelector('.pause-overlay')!;
     this.pauseButton = root.querySelector('.mobile-pause')!;
     this.brakeButton = root.querySelector('.touch-action--brake')!;
@@ -80,39 +113,114 @@ export class HUD {
     this.touchDebugCurrent = root.querySelector('[data-touch-current]')!;
     this.touchDebugVector = root.querySelector('[data-touch-vector]')!;
     this.pauseButton.addEventListener('click', onPauseToggle);
-    root.querySelector('[data-resume]')!.addEventListener('click', onPauseToggle);
+    this.pauseOverlay.querySelector('[data-resume]')!.addEventListener('click', onPauseToggle);
+    this.pauseOverlay.addEventListener('cancel', (event) => event.preventDefault());
+    this.dismiss.addEventListener('click', () => {
+      this.dismissHint();
+      this.cue.hidden = true;
+    });
+    for (const button of this.pauseOverlay.querySelectorAll<HTMLButtonElement>('[data-control]')) {
+      button.addEventListener('click', () => this.showReference(button.dataset.control!));
+    }
+    this.pauseOverlay.querySelector('[data-seed]')!.addEventListener('click', () => void this.copySeed());
     addEventListener('keydown', (event) => {
       if (event.code === 'F3') {
         event.preventDefault();
         this.debugVisible = !this.debugVisible;
+        this.debugCountdown = 0;
       }
     });
     this.debug.dataset.seed = String(config.seed);
-    this.updateHelp();
-  }
-
-  setControllerConnected(connected: boolean): void {
-    this.controllerConnected = connected;
-    this.updateHelp();
-    this.controllerToast.textContent = connected
-      ? 'Controller connected'
-      : 'Controller disconnected';
-    this.controllerToast.classList.add('visible');
-    clearTimeout(this.toastTimer);
-    this.toastTimer = window.setTimeout(() => {
-      this.controllerToast.classList.remove('visible');
-    }, 2200);
   }
 
   setInputMethod(method: InputMethod): void {
     this.inputMethod = method;
-    this.updateHelp();
   }
 
-  setPaused(paused: boolean): void {
-    this.pauseOverlay.classList.toggle('visible', paused);
-    this.pauseButton.textContent = paused ? 'Resume' : 'Pause';
-    this.pauseButton.setAttribute('aria-label', paused ? 'Resume game' : 'Pause game');
+  dismissHint(): void {
+    if (!this.hintPending) return;
+    this.hintPending = false;
+    try { localStorage.setItem(INTRO_KEY, '1'); } catch { /* In-memory dismissal still applies. */ }
+  }
+
+  updateCue(encounter: RunCue | null, steer: number, inactive: boolean): void {
+    if (this.hintPending && this.hintStart === 0 && !inactive) {
+      this.hintStart = performance.now();
+      try { localStorage.setItem(INTRO_KEY, '1'); } catch { /* In-memory dismissal still applies. */ }
+    }
+    if (this.hintPending && (Math.abs(steer) >= 0.26 || encounter || inactive ||
+        (this.hintStart > 0 && performance.now() - this.hintStart >= 4200))) this.dismissHint();
+    const hint = !inactive && !encounter && this.hintPending;
+    const tone = inactive ? '' : encounter?.tone ?? (hint ? 'hint' : '');
+    if (tone !== this.currentTone) {
+      this.currentTone = tone;
+      this.cue.hidden = !tone;
+      this.cue.dataset.tone = tone;
+      this.dismiss.hidden = !hint;
+      this.cueText.setAttribute('aria-live', tone === 'clock' ? 'off' : 'polite');
+    }
+    if (!tone) return;
+    const text = encounter?.text ?? {
+      touch: 'Drag left or right to carve',
+      keyboard: 'Press A or D to carve',
+      pointer: 'Drag sideways to carve',
+      gamepad: 'Tilt the left stick to carve',
+    }[this.inputMethod];
+    if (this.cueText.textContent !== text) this.cueText.textContent = text;
+  }
+
+  setPaused(paused: boolean, state: Readonly<SkiState>, run?: MountainRun): void {
+    if (paused === this.pauseOverlay.open) return;
+    if (!paused) {
+      this.pauseOverlay.classList.remove('visible');
+      this.pauseOverlay.close();
+      return;
+    }
+    this.dismissHint();
+    this.updateCue(null, 0, true);
+    this.showReference(this.inputMethod === 'pointer' ? 'keyboard' : this.inputMethod);
+    const trail = run ? TRAILS[run.section.trail] : null;
+    this.pauseOverlay.querySelector('[data-pause-trail]')!.textContent = trail?.name ?? 'Classic descent';
+    this.pauseOverlay.querySelector('[data-pause-details]')!.textContent = trail ? `${trail.difficulty} · ${trail.cue}` : '';
+    this.pauseOverlay.querySelector('[data-pause-distance]')!.textContent = `${Math.floor(state.position.y)} m`;
+    this.pauseOverlay.querySelector('[data-pause-speed]')!.textContent = `${Math.round(Math.hypot(state.velocityX, state.velocityY) * 3.6)} km/h`;
+    const race = run?.expansion;
+    const row = this.pauseOverlay.querySelector<HTMLElement>('[data-pause-race]')!;
+    row.hidden = !race || race.timer === 'waiting';
+    if (race && !row.hidden) {
+      row.querySelector('dd')!.textContent = `${race.time.toFixed(3)} s · ${race.outsideCourse ? 'outside course' : `${race.flagMisses} missed`}`;
+    }
+    this.pauseOverlay.querySelector('[data-seed]')!.textContent = `Copy seed ${run?.seed ?? this.config.seed}`;
+    this.pauseOverlay.querySelector('[data-seed-status]')!.textContent = '';
+    this.pauseOverlay.classList.add('visible');
+    this.pauseOverlay.showModal();
+  }
+
+  private showReference(method: string): void {
+    for (const button of this.pauseOverlay.querySelectorAll<HTMLButtonElement>('[data-control]')) {
+      button.setAttribute('aria-pressed', String(button.dataset.control === method));
+    }
+    for (const reference of this.pauseOverlay.querySelectorAll<HTMLElement>('[data-reference]')) {
+      reference.hidden = reference.dataset.reference !== method;
+    }
+  }
+
+  private async copySeed(): Promise<void> {
+    const url = new URL(location.pathname, location.origin);
+    url.searchParams.set('seed', String(this.config.seed));
+    if (!this.config.mountain) url.searchParams.set('course', 'classic');
+    else {
+      const { trail, scenario } = this.config.mountain;
+      if (trail !== 'pine') url.searchParams.set('section', trail);
+      if (scenario !== 'summit') url.searchParams.set('scenario', scenario);
+    }
+    const status = this.pauseOverlay.querySelector('[data-seed-status]')!;
+    try {
+      await navigator.clipboard.writeText(url.href);
+      status.textContent = 'Link copied';
+    } catch {
+      status.textContent = 'Could not copy the link';
+    }
   }
 
   get touchActionElements(): TouchActionElements {
@@ -120,6 +228,10 @@ export class HUD {
   }
 
   updateTouchDiagnostics(diagnostics: Readonly<TouchDiagnostics>): void {
+    const brake = diagnostics.action === 'brake';
+    const tuck = diagnostics.action === 'tuck';
+    if (this.brakeButton.hasAttribute('data-held') !== brake) this.brakeButton.toggleAttribute('data-held', brake);
+    if (this.tuckButton.hasAttribute('data-held') !== tuck) this.tuckButton.toggleAttribute('data-held', tuck);
     if (!this.touchDebug.classList.contains('visible')) return;
     this.touchDebug.classList.toggle('active', diagnostics.steeringActive);
     this.touchDebug.dataset.steer = diagnostics.steer.toFixed(2);
@@ -134,12 +246,6 @@ export class HUD {
     this.touchDebugVector.style.transform = `translate3d(${diagnostics.originX}px, ${diagnostics.originY}px, 0) rotate(${angle}rad)`;
   }
 
-  private updateHelp(): void {
-    this.controllerHint.hidden = !this.controllerConnected;
-    this.touchHint.hidden = this.controllerConnected || this.inputMethod !== 'touch';
-    this.keyboardHint.hidden = this.controllerConnected || this.inputMethod === 'touch';
-  }
-
   update(
     state: Readonly<SkiState>,
     metrics: Readonly<MetricsSnapshot>,
@@ -149,16 +255,6 @@ export class HUD {
     npcMetrics: Readonly<NpcMetrics>,
     diagnostics: Readonly<Record<string, number | string>>,
   ): void {
-    const distance = Math.floor(state.position.y);
-    const speed = Math.round(Math.hypot(state.velocityX, state.velocityY) * 3.6);
-    if (distance !== this.lastDistance) {
-      this.distance.textContent = `${distance} m`;
-      this.lastDistance = distance;
-    }
-    if (speed !== this.lastSpeed) {
-      this.speed.textContent = `${speed} km/h`;
-      this.lastSpeed = speed;
-    }
     this.debug.classList.toggle('visible', this.debugVisible);
     if (!this.debugVisible) return;
     this.debugCountdown -= 1;
@@ -178,7 +274,7 @@ NPC PREP <em>${Number(diagnostics.npcRenderPreparationAverageMs ?? 0).toFixed(3)
 SUBMIT CPU <em>${Number(diagnostics.submissionCpuAverageMs ?? 0).toFixed(3)} ms</em>
 DRAWS <em>${drawCalls}</em>
 FEATURES <em>~${visibleFeatures} visible</em>
-NPCS <em>${npcMetrics.active} / 5 active</em>
+NPCS <em>${npcMetrics.active} active</em>
 NPC SIM <em>${npcMetrics.simulationMs.toFixed(3)} ms</em>
 CANVAS <em>${diagnostics.canvasPixelWidth ?? 0} × ${diagnostics.canvasPixelHeight ?? 0}</em>
 PIXELS <em>${(Number(diagnostics.canvasPixels ?? 0) / 1_000_000).toFixed(2)} MP</em>
@@ -192,6 +288,7 @@ CLIPMAP Δ <em>0 cells</em>
 RES <em>${innerWidth} × ${innerHeight}</em>
 QUALITY <em>${config.quality}</em>
 WORLD <em>${state.position.x.toFixed(1)}, ${state.position.y.toFixed(1)}</em>
+BUILD <em>${BUILD_ID}</em>
 SEED <em>${config.seed}</em>${diagnostics.section ? `
 TRAIL <em>${diagnostics.section} · ${Number(diagnostics.sectionIndex) + 1}</em>
 GATES <em>${diagnostics.cleanGates} clean · ${diagnostics.gateStreak} streak</em>

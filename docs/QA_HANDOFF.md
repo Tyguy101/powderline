@@ -1,5 +1,104 @@
 # Powderline QA handoff
 
+## Phone-first in-run interface
+
+The baseline for this pass is production build `32266238` on
+[`Tyguy101/powderline`](https://github.com/Tyguy101/powderline), with
+[Vercel deployment 9P61CE1RB79zimYnxZpe1DWsqBR8](https://vercel.com/ty-games/powderline/9P61CE1RB79zimYnxZpe1DWsqBR8).
+The supplied iPhone Safari photo shows the address bars and the old touch
+layout. The seed-matched captures below use Chromium emulation and the
+viewport area available to the page. They exclude native browser chrome.
+
+| View | Before | After |
+| --- | --- | --- |
+| Portrait, 390 × 650 | [Ordinary skiing](../tools/reports/interface/before-portrait-ski.png) · [Fork](../tools/reports/interface/before-portrait-fork.png) | [Ordinary skiing](../tools/reports/interface/after-portrait-ski.png) · [Fork](../tools/reports/interface/after-portrait-fork.png) |
+| Landscape, 667 × 340 | [Ordinary skiing](../tools/reports/interface/before-landscape-ski.png) · [Fork](../tools/reports/interface/before-landscape-fork.png) | [Ordinary skiing](../tools/reports/interface/after-landscape-ski.png) · [Fork](../tools/reports/interface/after-landscape-fork.png) |
+| Desktop, 1440 × 900 | [Ordinary skiing](../tools/reports/interface/before-desktop-ski.png) · [Fork](../tools/reports/interface/before-desktop-fork.png) | [Ordinary skiing](../tools/reports/interface/after-desktop-ski.png) · [Fork](../tools/reports/interface/after-desktop-fork.png) |
+
+The downhill HUD has a 44 px Pause target, plus 66 × 52 px Brake and
+Tuck targets in portrait and 62 × 48 px in short landscape. Speed controls
+sit above safe-area insets at the lower right. The active target uses a
+filled pressed state that follows touch ownership when the speed thumb
+slides between buttons. Pause holds the current trail, descent, speed,
+race result, seed sharing, input reference, and build ID. F3 still opens
+diagnostics. Crash puts Retry Section first and retains replay sharing
+and Restart at the Top.
+
+One corner cue handles the steering hint, race clock and result, and
+urgent hazards. The hint dismisses on an intentional carve, after 4.2 s,
+or via its close button. Repeat descents and retries stay quiet. The race
+result clears after 3.6 s at most and remains in Pause while on the course.
+World signs show a guide row and then the entrance row without the
+overhead prompt. Both touch modes, replay v8, collision rules, and the
+fixed 60 Hz simulation continue to use the existing input and course logic.
+
+At the matched Sun Bowl waypoint in the 390 × 650 phone layout, visible
+snow ahead increased from 63.6 to 73.7 m at ordinary speed and from 64.1
+to 73.6 m in sustained tuck. This is about **2.91 → 3.38 seconds** at
+21.8 m/s and **1.91 → 2.20 seconds** at 33.5 m/s. These measurements describe
+the extent of the viewport. Hazard timing and fork trigger distances are
+controlled by their existing world rules. The desktop measurement stayed
+at about 53.6 m. Portrait fits at least 55 m across, which is enough to
+show all three destination boards on the centered approach.
+
+The lifecycle suite covered four emulated profiles and drove a right-hand
+Sun Bowl entry above 30 m/s in [tall portrait](../tools/reports/mobile-lifecycle/tall-phone-fork-tuck.png)
+and [narrow landscape](../tools/reports/mobile-lifecycle/narrow-landscape-fork-tuck.png).
+Native Chromium touch input checked independent steering and speed,
+switching Brake to Tuck, pressed feedback, pointer cancellation, and
+scroll lock. A shortened viewport and a rotation preserved the paused
+position. The interface run exercised first and repeat descent, Pause
+focus and seed copying, race invalidation, and a potato boulder crash
+with replay copy, retry, and a fresh restart.
+
+| Evidence | Capture |
+| --- | --- |
+| Pause and controls | [Phone](../tools/reports/interface/local-phone-pause.png) · [Desktop](../tools/reports/interface/local-desktop-pause.png) |
+| Speed Run | [Clock](../tools/reports/interface/local-phone-clock.png) · [Result](../tools/reports/interface/local-phone-result.png) |
+| Hazards and recovery | [Potato warning](../tools/reports/interface/local-phone-warning-potato.png) · [Crash](../tools/reports/interface/local-phone-crash-potato.png) · [Replay](../tools/reports/interface/local-phone-boulder-replay.txt) |
+
+```powershell
+npm run lint
+npm test
+npm run build
+npm run qa:mobile
+npm run qa:interface
+npm run qa:expansion -- --focus=patrol
+npm run qa:expansion -- --focus=speed
+npm run qa:expansion -- --focus=hazards --potato
+npm run benchmark -- --duration=5 --warmup=3 --scenario=interface-after
+npm run benchmark:mobile -- --touch --dpr=2 --duration=5 --warmup=3 --scenario=interface-after-touch
+```
+
+For production checks, point `POWDERLINE_QA_URL` at the public domain and
+set `POWDERLINE_BUILD` to the eight-character release SHA. Run
+`npm run qa:interface -- --smoke`. The browser writes screenshots and JSON
+to ignored `tools/reports/interface`.
+
+### Frame pacing
+
+Matched five-second Chrome samples used seed 424242 and three seconds of
+warm-up. Desktop was 1440 × 900 at DPR 1. Phone was 390 × 844 at DPR 2
+with coarse input and touch emulation enabled. Figures are p50 / p95 / p99
+frame intervals in milliseconds.
+
+| Profile | Canvas pixels | Baseline | Interface |
+| --- | ---: | --- | --- |
+| Desktop | 998,560 | [16.70 / 16.90 / 17.00](../tools/reports/interface-before-1440x900-dpr1.json) | [16.70 / 16.90 / 17.00](../tools/reports/interface-after-1440x900-dpr1.json) |
+| Touch phone | 740,610 | [16.70 / 16.90 / 17.00](../tools/reports/interface-before-touch-390x844-dpr2.json) | [16.70 / 16.90 / 17.00](../tools/reports/interface-after-touch-390x844-dpr2.json) |
+
+All four samples recorded zero intervals above 33.34 ms. The touch sample
+showed a 0.095 ms increase in average CPU submission and a 0.009 ms decrease
+in render preparation. Both Patrol Road branches merged cleanly on desktop.
+The clean Speed Run and its replay both recorded 28.730 s with zero misses.
+Potato cleared three combined sequences and retried a crash after both
+hazards were active. Lint, 51 tests, and the production build passed.
+
+Physical Safari with the address bars moving, actual thumb reach and
+button switching, and physical controller feel still need a hands-on run.
+Start at the [seed 1729 fork](https://powderline-lake.vercel.app/?seed=1729&scenario=fork)
+and the [combined hazards](https://powderline-lake.vercel.app/?seed=1729&section=hazards&scenario=encounter).
+
 ## Endless Mountain route expansion
 
 Local branch `codex/route-expansion`. Gameplay commit `71e43fb`.

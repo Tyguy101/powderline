@@ -275,7 +275,8 @@ export class InputManager {
     if ((event.code === 'Escape' || event.code === 'KeyP') && !event.repeat) {
       this.pauseRequested = true;
     }
-    if ((event.code === 'Enter' || event.code === 'Space') && !event.repeat) {
+    if ((event.code === 'Enter' || event.code === 'Space') && !event.repeat &&
+      !(event.target instanceof HTMLElement && event.target.closest('button, a[href], input, select, textarea, summary'))) {
       this.confirmRequested = true;
     }
     this.updateState();

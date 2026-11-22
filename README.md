@@ -61,8 +61,9 @@ The generated certificate is self-signed and must be trusted on each test
 device. Production is served over trusted HTTPS.
 
 Use `npm run dev -- --host 127.0.0.1` for loopback-only play. A new descent
-starts in Pine Glades with a random seed. Click the seed in the HUD to copy a
-link to its starting layout, or specify one with `?seed=1729`.
+starts in Pine Glades with a random seed. Pause to see the current trail,
+run stats, and the controls reference. Use Copy seed to share its starting
+layout, or specify one with `?seed=1729`. The pause panel also shows the build ID.
 
 For seed 1729, take **left → left → right → left → right** to ski Pine Glades,
 Gate Run, Big Air Park, Needle Chute, Avalanche Alley, and then return to Gate

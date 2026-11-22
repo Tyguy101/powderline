@@ -169,17 +169,18 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
   const pause = page.locator('.mobile-pause');
   const box = await pause.boundingBox();
   assert(box && box.width >= 44 && box.height >= 44, 'Mobile pause target is smaller than 44px.');
-  assert(await page.locator('[data-touch-help]').isVisible(), 'Touch-specific help is not visible.');
   const brake = page.locator('.touch-action--brake');
   const tuck = page.locator('.touch-action--tuck');
   const brakeBox = await brake.boundingBox();
   const tuckBox = await tuck.boundingBox();
-  assert(brakeBox && brakeBox.width >= 70 && brakeBox.height >= 70,
-    'BRAKE touch target is too small.');
-  assert(tuckBox && tuckBox.width >= 70 && tuckBox.height >= 70,
-    'TUCK touch target is too small.');
+  assert(brakeBox && brakeBox.width >= 44 && brakeBox.height >= 44,
+    'Brake touch target is smaller than 44px.');
+  assert(tuckBox && tuckBox.width >= 44 && tuckBox.height >= 44,
+    'Tuck touch target is smaller than 44px.');
+  assert(brakeBox.y + brakeBox.height < tuckBox.y, 'Brake and Tuck targets overlap.');
   await pause.click();
   await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.paused === 'true');
+  assert(await page.locator('[data-reference="touch"]').isVisible(), 'Pause did not show touch controls.');
   const resume = page.locator('[data-resume]');
   const resumeBox = await resume.boundingBox();
   assert(resumeBox && resumeBox.width >= 44 && resumeBox.height >= 44, 'Resume target is smaller than 44px.');
@@ -263,6 +264,8 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
   touch = await readSnapshot(page);
   assert(!touch.inputBrake && touch.inputTuck && touch.inputSteer < -0.3,
     'BRAKE to TUCK switching interrupted steering or left BRAKE active.');
+  assert(await tuck.getAttribute('data-held') !== null && await brake.getAttribute('data-held') === null,
+    'Pressed styling did not follow the active touch target.');
 
   await emitPointer('#game-canvas', 'pointerup', 41, originX - 70, originY - 80);
   await page.waitForFunction(() => Math.abs(Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.inputSteer)) < 0.01);
@@ -360,14 +363,13 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
       names.some((name) => name.includes('↓Pine Glades')) &&
       names.some((name) => name.includes('↘Sun Bowl')),
     `${profile.name}: destination names and arrows are missing in ${label} orientation.`);
-    const trail = await page.getByRole('region', { name: 'Current trail' }).boundingBox();
     const pause = await page.locator('.mobile-pause').boundingBox();
-    assert(trail && pause && trail.x >= pause.x + pause.width,
-      `${profile.name}: current trail sits under pause in ${label} orientation.`);
+    assert(pause && !(await page.getByRole('region', { name: 'Current trail' }).isVisible()),
+      `${profile.name}: the downhill view shows trail metadata in ${label} orientation.`);
     forkLayouts.push({ label, viewport, names });
     await page.screenshot({ path: path.join(reportDirectory, `${profile.name}-fork-${label}.png`) });
   }
-  if (profile.name === 'narrow-landscape') {
+  if (profile.name === 'narrow-landscape' || profile.name === 'tall-phone') {
     await page.setViewportSize(profile.viewport);
     await page.goto('http://127.0.0.1:4175/?seed=1729&quality=low&scenario=fork');
     const session = await context.newCDPSession(page);
@@ -397,9 +399,12 @@ async function runProfile(browser: Browser, profile: MobileProfile): Promise<Rec
       return Number(m?.sectionEnd) - Number(m?.worldY) < 34;
     });
     assert(Number(await page.evaluate(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.velocityY)) > 30,
-      'Narrow landscape fork approach was slower than tuck speed.');
-    await page.screenshot({ path: path.join(reportDirectory, 'narrow-landscape-fork-tuck.png') });
-    await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.lastLane === 1);
+      `${profile.name}: fork approach was slower than tuck speed.`);
+    await page.screenshot({ path: path.join(reportDirectory, `${profile.name}-fork-tuck.png`) });
+    await page.waitForFunction(() => {
+      const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
+      return m?.lastLane === 1 && m.section === 'sun' && m.crashed === 'false';
+    });
     await emit('touchEnd', []);
     await session.detach();
   }

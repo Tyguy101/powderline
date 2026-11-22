@@ -1,7 +1,8 @@
 import type { SkiState } from '../simulation/SkiPhysics';
 import type { MountainRun } from '../simulation/MountainRun';
+import type { RunCue } from './HUD';
 import {
-  FORK_BANNER_OFFSET, FORK_COLORS, FORK_ENTRANCE_OFFSET, FORK_GUIDE_OFFSET, LANE_SPACING,
+  FORK_COLORS, FORK_ENTRANCE_OFFSET, FORK_GUIDE_OFFSET, LANE_SPACING,
   TRAILS, pathCenter, type Section,
 } from '../world/EndlessMountain';
 
@@ -19,7 +20,6 @@ function placeBoard(board: HTMLElement, x: number, y: number, width: number, vie
 
 class TrailSigns {
   readonly root = document.createElement('section');
-  private readonly banner = document.createElement('div');
   private readonly guide: HTMLElement[] = [];
   private readonly mouths: HTMLElement[] = [];
   private sectionId = -1;
@@ -27,9 +27,6 @@ class TrailSigns {
   constructor(host: HTMLElement) {
     this.root.className = 'trail-signs';
     this.root.setAttribute('aria-label', 'Trail signs');
-    this.banner.className = 'trail-sign trail-instruction';
-    this.banner.textContent = 'Choose your next trail';
-    this.root.append(this.banner);
     for (const row of [this.guide, this.mouths]) {
       for (const [index, arrow] of ['↙', '↓', '↘'].entries()) {
         const board = document.createElement('div');
@@ -48,7 +45,7 @@ class TrailSigns {
   }
 
   update(section: Section | null, view: MountainView): void {
-    this.root.hidden = !section || Math.abs(section.end - view.y) > view.height / 2 + FORK_BANNER_OFFSET + 8;
+    this.root.hidden = !section || Math.abs(section.end - view.y) > view.height / 2 + FORK_GUIDE_OFFSET + 8;
     if (this.root.hidden || !section) return;
     if (section.id !== this.sectionId) {
       this.sectionId = section.id;
@@ -58,36 +55,29 @@ class TrailSigns {
         this.mouths[index]!.querySelector('strong')!.textContent = name;
       }
     }
-    placeBoard(this.banner, section.center, section.end - FORK_BANNER_OFFSET, 33, view);
+    const mouthY = section.end - FORK_ENTRANCE_OFFSET;
+    const showMouths = mouthY < view.y + view.height * 0.43;
+    const row = showMouths ? this.mouths : this.guide;
+    const hiddenRow = showMouths ? this.guide : this.mouths;
     for (let i = 0; i < 3; i += 1) {
+      hiddenRow[i]!.hidden = true;
       const x = section.center + (i - 1) * LANE_SPACING;
-      placeBoard(this.guide[i]!, x, section.end - FORK_GUIDE_OFFSET, 16.7, view);
-      placeBoard(this.mouths[i]!, x, section.end - FORK_ENTRANCE_OFFSET, 16.7, view);
+      placeBoard(row[i]!, x, showMouths ? mouthY : section.end - FORK_GUIDE_OFFSET, 16.7, view);
     }
   }
 
 }
 
 export class MountainHUD {
-  private readonly trail: HTMLElement;
-  private readonly line: HTMLElement;
-  private readonly seed: HTMLButtonElement;
-  private readonly notice: HTMLElement;
   private readonly signs: TrailSigns;
   private readonly previousSigns: TrailSigns;
   private readonly timedBoards: HTMLElement[];
   private readonly patrolBoards: HTMLElement[];
-  private section = -1;
+  private finishSeenAt: number | undefined;
 
   constructor(host: HTMLElement, private readonly run: MountainRun, private readonly view: MountainView) {
     const root = document.createElement('div');
     root.className = 'mountain-ui';
-    root.innerHTML = `
-      <section class="mountain-trail" aria-label="Current trail">
-        <div><i></i><strong></strong></div><small></small>
-        <button type="button" data-seed title="Copy a link to this descent">Seed <span></span></button>
-      </section>
-      <div class="mountain-notice" role="status" hidden></div>`;
     this.previousSigns = new TrailSigns(root);
     this.signs = new TrailSigns(root);
     const boards = root.appendChild(document.createElement('section'));
@@ -97,23 +87,6 @@ export class MountainHUD {
     this.patrolBoards = ['Patrol split', '↙ Tight bend', '↘ Wide line'].map((label, index) =>
       this.makeBoard(boards, label, '#4b625d', index === 0));
     host.append(root);
-    this.trail = root.querySelector('.mountain-trail')!;
-    this.line = this.trail.querySelector('small')!;
-    this.seed = this.trail.querySelector('button')!;
-    this.notice = root.querySelector('.mountain-notice')!;
-    this.seed.addEventListener('click', async () => {
-      const { trail, scenario } = this.run.start;
-      const url = new URL(location.pathname, location.origin);
-      url.searchParams.set('seed', String(this.run.seed));
-      if (trail !== 'pine') url.searchParams.set('section', trail);
-      if (scenario !== 'summit') url.searchParams.set('scenario', scenario);
-      try {
-        await navigator.clipboard.writeText(url.href);
-        this.seed.textContent = 'Seed link copied';
-      } catch {
-        this.seed.textContent = `Seed ${this.run.seed}`;
-      }
-    });
   }
 
   private makeBoard(host: HTMLElement, label: string, paint: string, large: boolean): HTMLElement {
@@ -126,45 +99,42 @@ export class MountainHUD {
     return board;
   }
 
-  update(state: Readonly<SkiState>): void {
-    const { section, avalanche, gateIndex, gateStreak, gateOutcome, wave, wavesCleared } = this.run;
+  update(state: Readonly<SkiState>): RunCue | null {
+    const { section, avalanche, wave, expansion } = this.run;
     this.signs.update(section, this.view);
     this.previousSigns.update(this.run.previous, this.view);
     this.updateCourseBoards(section);
-    const trail = TRAILS[section.trail];
-    if (this.section !== section.id) {
-      this.section = section.id;
-      this.trail.querySelector('strong')!.textContent = trail.name;
-      this.trail.style.setProperty('--trail-color', trail.color);
-      this.seed.textContent = `Seed ${this.run.seed}`;
-    }
-    const nextGate = section.gates[gateIndex];
-    const race = this.run.expansion;
-    const timed = section.expansion.timed;
-    const nextFlag = timed?.flags[race.flagIndex];
-    const timedInfo = race.timer === 'running'
-      ? `${race.time.toFixed(1)} s · ${race.flagMisses} missed${nextFlag ? ` · Pass ${nextFlag.passSide < 0 ? 'left' : 'right'} in ${Math.max(0, Math.ceil(nextFlag.y - state.position.y))} m` : ''}`
-      : race.timer === 'finished' ? this.finishText() : '';
-    const info = timedInfo || (nextGate ? `Streak ${gateStreak} · ${gateOutcome === 'missed' ? 'Missed · ' : ''}Gate in ${Math.max(0, Math.ceil(nextGate.y - state.position.y))} m`
-      : `${trail.difficulty} · ${trail.cue}`);
-    if (this.line.textContent !== info) this.line.textContent = info;
+    if (expansion.timer !== 'finished') this.finishSeenAt = undefined;
+    if (state.crashed) return null;
+
     const direction = wave?.safeSide === -1 ? 'left' : 'right';
-    const slideNotice = avalanche === 'warning' ? `Snow shifting · cross ${direction}` :
-      avalanche === 'chasing' ? `Avalanche · stay ${direction} of the crossing flags` :
-      avalanche === 'escaped' && wavesCleared === section.waves.length ? 'Clear of the slide path' : '';
-    const upcomingRock = section.expansion.boulders.find((line) =>
-      line.start > state.position.y && line.start - state.position.y < 65);
-    const hazardNotice = race.ice && race.iceTime > 0
-      ? (race.boulder ? 'Rock behind · dodge the ice shadow' : 'Falling ice · dodge the shadow')
-      : race.boulder ? 'Rolling boulder · move off its line' : upcomingRock ? 'Rolling-rock track ahead' : '';
-    const raceNotice = timed && race.timer === 'waiting' && state.position.y >= timed.start - 92
-      ? 'Pass on each arrow side · misses cancel the time'
-      : timed && race.timer === 'finished' && state.position.y < timed.finish + 115 ? this.finishText() : '';
-    const notice = slideNotice || hazardNotice || raceNotice;
-    this.notice.hidden = !notice || state.crashed ||
-      (avalanche === 'escaped' && state.position.y > (wave?.trigger ?? 0) + 180);
-    if (this.notice.textContent !== notice) this.notice.textContent = notice;
-    this.notice.dataset.state = hazardNotice ? 'warning' : raceNotice ? 'race' : avalanche;
+    if (avalanche === 'warning') return { text: 'Snow shifting · cross ' + direction, tone: 'warning' };
+    if (avalanche === 'chasing') return { text: 'Avalanche · stay ' + direction + ' of the flags', tone: 'warning' };
+    if (expansion.ice && expansion.iceTime > 0) {
+      const text = expansion.boulder ? 'Rock behind · dodge the ice shadow' : 'Falling ice · dodge the shadow';
+      return { text, tone: 'warning' };
+    }
+    if (expansion.boulder && expansion.rockY - state.position.y < 18) {
+      return { text: 'Rolling boulder · leave its line', tone: 'warning' };
+    }
+
+    const timed = section.expansion.timed;
+    if (!timed) return null;
+    if (expansion.timer === 'running') {
+      const time = expansion.time.toFixed(1) + ' s';
+      const invalid = expansion.outsideCourse || expansion.flagMisses > 0;
+      return { text: invalid ? time + ' · Invalid time' : time, tone: 'clock' };
+    }
+    if (expansion.timer === 'waiting' && state.position.y >= timed.start - 55) {
+      return { text: 'Follow flag arrows · misses void the time', tone: 'race' };
+    }
+    if (expansion.timer === 'finished') {
+      this.finishSeenAt ??= performance.now();
+      if (performance.now() - this.finishSeenAt < 3600 && state.position.y < timed.finish + 115) {
+        return { text: this.finishText(), tone: 'race' };
+      }
+    }
+    return null;
   }
 
   private finishText(): string {

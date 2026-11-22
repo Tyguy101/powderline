@@ -460,7 +460,6 @@ export class MountainRenderer {
   private junction(section: Section): void {
     const { center, end } = section;
     const entry = end - FORK_LENGTH;
-    this.gantry(center, end - FORK_BANNER_OFFSET, 33, '#203c49');
     for (const offer of section.offers) {
       const x = center + offer.lane * LANE_SPACING;
       const color = FORK_COLORS[offer.lane + 1]!;

@@ -1,5 +1,5 @@
 export class CrashOverlay {
-  private readonly root: HTMLElement;
+  private readonly root: HTMLDialogElement;
   private readonly distance: HTMLElement;
   private replay = '';
 
@@ -8,17 +8,17 @@ export class CrashOverlay {
     onRestart: () => void,
     onRetry?: () => void,
   ) {
-    this.root = document.createElement('section');
+    this.root = document.createElement('dialog');
     this.root.className = 'crash-overlay';
-    this.root.setAttribute('aria-label', 'Run crashed');
+    this.root.setAttribute('aria-labelledby', 'crash-title');
+    this.root.addEventListener('cancel', (event) => event.preventDefault());
     this.root.innerHTML = `<div class="crash-card">
-      <span>WIPEOUT</span>
-      <strong data-crash-title>Powder happens.</strong>
+      <h1 id="crash-title" data-crash-title>Powder happens.</h1>
       <p>You made it <b data-distance>0 m</b> downhill.</p>
       <div>${onRetry ? '<button type="button" data-action="retry">Retry Section <kbd>R</kbd></button>' : ''}
       <button type="button" data-action="restart">${onRetry ? 'Restart at the Top' : 'Restart <kbd>R</kbd>'}</button>
       <button type="button" data-action="replay">Copy replay link</button></div>
-      <small data-copy-status></small>
+      <small data-copy-status role="status"></small>
     </div>`;
     host.append(this.root);
     this.distance = this.root.querySelector('[data-distance]')!;
@@ -60,10 +60,12 @@ export class CrashOverlay {
     this.root.querySelector<HTMLButtonElement>('[data-action="replay"]')!.disabled = !replay;
     if (!replay) this.root.querySelector<HTMLElement>('[data-copy-status]')!.textContent = replayStatus;
     this.root.classList.add('visible');
+    if (!this.root.open) this.root.showModal();
   }
 
   hide(): void {
     this.root.classList.remove('visible');
+    this.root.close();
     this.root.querySelector<HTMLElement>('[data-copy-status]')!.textContent = '';
   }
 }

@@ -93,7 +93,7 @@ serving.
 
 Vercel supplies `VERCEL_GIT_COMMIT_SHA`. Vite embeds its first eight characters
 in the game. Local builds use `git rev-parse --short=8 HEAD`. The identifier is
-visible in the bottom-left status chip and exposed in the runtime metrics.
+visible in Pause and F3 diagnostics, and exposed in the runtime metrics.
 
 ## Runtime diagnostics
 

@@ -93,7 +93,7 @@ export class Game {
     if (this.mountain) this.mountainHUD = new MountainHUD(root, this.mountain, this.renderer.view);
     this.input = new InputManager(
       canvas,
-      (connected) => this.hud.setControllerConnected(connected),
+      undefined,
       (method) => this.hud.setInputMethod(method),
       undefined,
       this.hud.touchActionElements,
@@ -322,6 +322,7 @@ export class Game {
 
   private retrySection(): void {
     this.setPaused(false);
+    this.hud.dismissHint();
     this.input.resetTransientState();
     if (this.mountain && this.checkpoint) {
       this.mountain.retry();
@@ -343,11 +344,12 @@ export class Game {
   }
 
   private setPaused(paused: boolean): void {
+    if (paused && this.crashPromptShown) return;
     this.paused = paused;
     this.renderWhilePaused = true;
     if (paused) this.input.resetTransientState();
     else this.loop.resetClock();
-    this.hud.setPaused(paused);
+    this.hud.setPaused(paused, this.physics.state, this.mountain);
     // Publish the transition before a lifecycle suspension stops RAF entirely.
     // This keeps diagnostics and automated freeze checks synchronized with the
     // actual fixed-step state instead of the last throttled metrics snapshot.
@@ -444,7 +446,8 @@ export class Game {
     this.hud.updateTouchDiagnostics(touchDiagnostics);
     if (!this.paused || this.renderWhilePaused) {
       this.renderer.draw(state, this.simulationInput, this.origin.origin, this.npcs.states);
-      this.mountainHUD?.update(state);
+      const encounter = this.mountainHUD?.update(state) ?? null;
+      this.hud.updateCue(encounter, this.input.state.steer, this.paused || state.crashed);
       this.renderWhilePaused = false;
     }
     this.metricsPublishCountdown -= 1;
@@ -478,6 +481,7 @@ export class Game {
       touchAction: touchDiagnostics.action,
       cameraComposition: this.renderer.mobileComposition,
       skierScreenYPercent: this.renderer.skierScreenYPercent(state),
+      downhillSightMeters: this.renderer.view.y + this.renderer.view.height / 2 - state.position.y,
       effectiveCameraScale: this.renderer.effectiveCameraScale,
       visibility: document.visibilityState,
       orientation: matchMedia('(orientation: portrait)').matches ? 'portrait' : 'landscape',

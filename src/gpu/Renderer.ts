@@ -69,6 +69,11 @@ export class GameRenderer {
   private debugContactWorldY = 0;
   private appliedPixelRatio = 1;
   private landscapeMobileComposition = false;
+  private portraitMobileComposition = false;
+
+  private get baseLookAhead(): number {
+    return this.landscapeMobileComposition ? 0.32 : this.portraitMobileComposition ? 0.255 : 0.19;
+  }
   private lastPlayerWorldY = 0;
   readonly preparationTiming = new TimingCounter();
   readonly submissionTiming = new TimingCounter();
@@ -153,13 +158,12 @@ export class GameRenderer {
     this.cameraWorldX +=
       (state.position.x - this.cameraWorldX) * (1 - Math.exp(-deltaSeconds * 4.2));
     const speedLookAhead = Math.max(0, Math.min(1, (speed - 10) / 24));
-    const baseLookAhead = this.landscapeMobileComposition ? 0.32 : 0.19;
-    const speedLookAheadRange = this.landscapeMobileComposition ? 0.025 : 0.055;
+    const speedLookAheadRange = this.landscapeMobileComposition ? 0.025 : this.portraitMobileComposition ? 0.04 : 0.055;
     const timed = this.mountain?.section.expansion.timed;
     const courseLookAhead = timed && state.position.y >= timed.start - 45 &&
-      state.position.y <= timed.finish + 25 ? 0.13 : 0;
+      state.position.y <= timed.finish + 25 ? (this.landscapeMobileComposition || this.portraitMobileComposition ? 0.085 : 0.13) : 0;
     const targetY = state.position.y + this.viewHeight *
-      (baseLookAhead + speedLookAhead * speedLookAheadRange + courseLookAhead);
+      (this.baseLookAhead + speedLookAhead * speedLookAheadRange + courseLookAhead);
     const sun = this.mountain?.section.expansion.bowlReveal;
     const light = sun != null ? Math.max(0, Math.min(1, (state.position.y - sun + 38) / 57)) : 0;
     this.snowWarmth += (light - this.snowWarmth) * Math.min(1, deltaSeconds * 3.8);
@@ -298,8 +302,8 @@ export class GameRenderer {
 
   resetCamera(state: Readonly<SkiState>): void {
     this.cameraWorldX = state.position.x;
-    this.cameraWorldY = state.position.y + this.viewHeight *
-      (this.landscapeMobileComposition ? 0.32 : 0.19);
+    this.lastPlayerWorldY = state.position.y;
+    this.cameraWorldY = state.position.y + this.viewHeight * this.baseLookAhead;
   }
 
   recordTrail(state: Readonly<SkiState>, deltaSeconds: number): void {
@@ -381,7 +385,8 @@ export class GameRenderer {
   }
 
   get mobileComposition(): string {
-    return this.landscapeMobileComposition ? 'landscape-lookahead' : 'responsive-default';
+    return this.landscapeMobileComposition ? 'landscape-lookahead' :
+      this.portraitMobileComposition ? 'portrait-lookahead' : 'responsive-default';
   }
 
   skierScreenYPercent(state: Readonly<SkiState>): number {
@@ -403,16 +408,17 @@ export class GameRenderer {
     this.renderer.setPixelRatio(this.appliedPixelRatio);
     this.renderer.setSize(size.x, size.y, false);
     const aspect = size.x / size.y;
-    const previousLandscapeComposition = this.landscapeMobileComposition;
-    this.landscapeMobileComposition = this.mobileCameraMode === 'landscape' &&
-      matchMedia('(pointer: coarse)').matches && aspect > 1.15;
-    this.viewHeight = this.landscapeMobileComposition
-      ? 88
-      : aspect < 0.72 ? 94 : aspect < 1.15 ? 86 : BASE_VIEW_HEIGHT;
-    if (previousLandscapeComposition !== this.landscapeMobileComposition) {
-      this.cameraWorldY = this.lastPlayerWorldY + this.viewHeight *
-        (this.landscapeMobileComposition ? 0.32 : 0.19);
-    }
+    const previousComposition = this.mobileComposition;
+    const previousHeight = this.viewHeight;
+    const mobile = this.mobileCameraMode === 'landscape' && matchMedia('(pointer: coarse)').matches;
+    this.landscapeMobileComposition = mobile && aspect > 1.15;
+    this.portraitMobileComposition = mobile && aspect <= 1;
+    this.viewHeight = this.landscapeMobileComposition ? 88 :
+      this.portraitMobileComposition ? Math.max(100, 55 / aspect) :
+      aspect < 0.72 ? 94 : aspect < 1.15 ? 86 : BASE_VIEW_HEIGHT;
+    const lookAhead = previousComposition === this.mobileComposition
+      ? (this.cameraWorldY - this.lastPlayerWorldY) / previousHeight : this.baseLookAhead;
+    this.cameraWorldY = this.lastPlayerWorldY + this.viewHeight * lookAhead;
     this.viewWidth = this.viewHeight * aspect;
     this.snowMesh.scale.set(this.viewWidth, this.viewHeight, 1);
     this.markerMesh.scale.set(this.viewWidth, this.viewHeight, 1);

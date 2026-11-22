@@ -11,6 +11,7 @@ const quality = argument('quality', 'medium');
 const viewportText = argument('viewport', '1440x900');
 const [width = 1440, height = 900] = viewportText.split('x').map(Number);
 const dpr = Number(argument('dpr', '1'));
+const touch = process.argv.includes('--touch');
 const durationSeconds = Number(argument('duration', '10'));
 const warmupSeconds = Number(argument('warmup', '3'));
 const disable = argument('disable', '');
@@ -109,6 +110,8 @@ try {
   const context = await browser.newContext({
     viewport: { width, height },
     deviceScaleFactor: dpr,
+    isMobile: touch,
+    hasTouch: touch,
   });
   const page = await context.newPage();
   const errors: string[] = [];
@@ -238,7 +241,7 @@ try {
     route: { seed, section, start, drive, avalanche, lead: Number.isFinite(lead) ? lead : null,
       wave, forkRange, replayFile: replayFile || null, crowd, combined },
     durationSeconds,
-    viewport: { width, height, dpr },
+    viewport: { width, height, dpr, touch },
     canvas: { ...pageData.canvas, pixels: canvasPixels },
     environment: pageData.environment,
     frameTime: summarize(pageData.samples.slice(1)),
