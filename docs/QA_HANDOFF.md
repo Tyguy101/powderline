@@ -27,8 +27,10 @@ and Restart at the Top.
 
 The corner cue handles the race clock, race result, and urgent hazards.
 The controls reference opens through Pause. First descents, repeat descents,
-and retries begin without an automatic steering hint. A background or
-focus-loss pause shows Resume without opening the controls reference. The race
+and retries begin without an automatic steering hint. Focus changes clear
+held inputs. The browser stops drawing while hidden and returns to the run
+without showing Pause or Resume. A wipeout offers a Recovery options button
+to open the recovery dialog. The race
 result clears after 3.6 s at most and remains in Pause while on the course.
 World signs show a guide row and then the entrance row without the
 overhead prompt. Both touch modes, replay v8, collision rules, and the

@@ -1,7 +1,5 @@
-export type LifecyclePauseReason = 'background' | 'focus-loss';
-
 export interface LifecycleHooks {
-  pause(reason: LifecyclePauseReason): void;
+  clearInput(): void;
   suspend(): void;
   resume(): void;
   viewportChanged(): void;
@@ -32,7 +30,7 @@ export class LifecycleManager {
   private suspend(): void {
     if (this.suspended) return;
     this.suspended = true;
-    this.hooks.pause('background');
+    this.hooks.clearInput();
     this.hooks.suspend();
   }
 
@@ -50,6 +48,6 @@ export class LifecycleManager {
 
   private readonly onPageHide = (): void => this.suspend();
   private readonly onPageShow = (): void => this.restore();
-  private readonly onBlur = (): void => this.hooks.pause('focus-loss');
+  private readonly onBlur = (): void => this.hooks.clearInput();
   private readonly onViewportChange = (): void => this.hooks.viewportChanged();
 }

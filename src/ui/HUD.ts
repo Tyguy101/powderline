@@ -130,7 +130,7 @@ export class HUD {
     if (encounter && this.cueText.textContent !== encounter.text) this.cueText.textContent = encounter.text;
   }
 
-  setPaused(paused: boolean, state: Readonly<SkiState>, run?: MountainRun, resumeOnly = false): void {
+  setPaused(paused: boolean, state: Readonly<SkiState>, run?: MountainRun): void {
     if (paused === this.pauseOverlay.open) return;
     if (!paused) {
       this.pauseOverlay.classList.remove('visible');
@@ -138,7 +138,6 @@ export class HUD {
       return;
     }
     this.updateCue(null);
-    this.pauseOverlay.toggleAttribute('data-resume-only', resumeOnly);
     this.showReference(this.inputMethod === 'pointer' ? 'keyboard' : this.inputMethod);
     const trail = run ? TRAILS[run.section.trail] : null;
     this.pauseOverlay.querySelector('[data-pause-trail]')!.textContent = trail?.name ?? 'Classic descent';

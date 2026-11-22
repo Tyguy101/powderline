@@ -80,9 +80,11 @@ button:focus-visible { outline: 3px solid #114b66; outline-offset: 3px; }
   color: #10313a; background: #f6fcfc; box-shadow: 0 16px 54px #0d2d3452;
   overflow: auto; overscroll-behavior: contain; touch-action: pan-y;
 }
-.pause-overlay[data-resume-only] { width: min(300px, calc(100vw - var(--safe-left) - var(--safe-right) - 28px)); }
-.pause-overlay[data-resume-only] .pause-card { display: block; }
-.pause-overlay[data-resume-only] :is(.pause-run, .pause-controls, .pause-build) { display: none; }
+.recovery-toggle {
+  position: fixed; z-index: 6; right: calc(var(--safe-right) + 12px); top: calc(var(--safe-top) + 10px);
+  min-height: 44px; padding: 0 12px; border-radius: 13px; border: 1px solid #8ba6ab;
+  background: #f4faf9; color: #10313a; font-size: 13px; font-weight: 760; cursor: pointer;
+}
 .pause-overlay::backdrop, .crash-overlay::backdrop { background: #12354050; }
 .pause-card, .crash-card { padding: clamp(16px, 4.6vw, 26px); }
 .pause-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

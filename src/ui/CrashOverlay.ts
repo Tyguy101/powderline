@@ -1,6 +1,7 @@
 export class CrashOverlay {
   private readonly root: HTMLDialogElement;
   private readonly distance: HTMLElement;
+  private readonly recovery: HTMLButtonElement;
   private replay = '';
 
   constructor(
@@ -8,10 +9,16 @@ export class CrashOverlay {
     onRestart: () => void,
     onRetry?: () => void,
   ) {
+    this.recovery = document.createElement('button');
+    this.recovery.type = 'button';
+    this.recovery.className = 'recovery-toggle';
+    this.recovery.textContent = 'Recovery options';
+    this.recovery.hidden = true;
+    this.recovery.addEventListener('click', () => this.root.showModal());
+    host.append(this.recovery);
     this.root = document.createElement('dialog');
     this.root.className = 'crash-overlay';
     this.root.setAttribute('aria-labelledby', 'crash-title');
-    this.root.addEventListener('cancel', (event) => event.preventDefault());
     this.root.innerHTML = `<div class="crash-card">
       <h1 id="crash-title" data-crash-title>Powder happens.</h1>
       <p>You made it <b data-distance>0 m</b> downhill.</p>
@@ -59,12 +66,11 @@ export class CrashOverlay {
     this.replay = replay;
     this.root.querySelector<HTMLButtonElement>('[data-action="replay"]')!.disabled = !replay;
     if (!replay) this.root.querySelector<HTMLElement>('[data-copy-status]')!.textContent = replayStatus;
-    this.root.classList.add('visible');
-    if (!this.root.open) this.root.showModal();
+    this.recovery.hidden = false;
   }
 
   hide(): void {
-    this.root.classList.remove('visible');
+    this.recovery.hidden = true;
     this.root.close();
     this.root.querySelector<HTMLElement>('[data-copy-status]')!.textContent = '';
   }

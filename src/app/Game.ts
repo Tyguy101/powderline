@@ -17,7 +17,7 @@ import { NpcSystem } from '../simulation/NpcSystem';
 import { BUILD_ID } from './build';
 import { newRunSeed, type GameConfig } from './config';
 import { TimingCounter } from '../instrumentation/PerformanceCounters';
-import { LifecycleManager, type LifecyclePauseReason } from './LifecycleManager';
+import { LifecycleManager } from './LifecycleManager';
 import { MountainRun } from '../simulation/MountainRun';
 import { MountainHUD } from '../ui/MountainHUD';
 import { hitsJumpObstacle, jumpAtLip, laneAt, pathCenter, pathHalfWidth, patrolMedian, skiBand } from '../world/EndlessMountain';
@@ -342,25 +342,17 @@ export class Game {
     this.renderer.clearImpactDebug();
   }
 
-  private setPaused(paused: boolean, resumeOnly = false): void {
+  private setPaused(paused: boolean): void {
     if (paused && this.crashPromptShown) return;
     this.paused = paused;
     this.renderWhilePaused = true;
     if (paused) this.input.resetTransientState();
     else this.loop.resetClock();
-    this.hud.setPaused(paused, this.physics.state, this.mountain, resumeOnly);
-    // Publish the transition before a lifecycle suspension stops RAF entirely.
-    // This keeps diagnostics and automated freeze checks synchronized with the
-    // actual fixed-step state instead of the last throttled metrics snapshot.
+    this.hud.setPaused(paused, this.physics.state, this.mountain);
     this.publicMetrics.paused = String(paused);
     this.publicMetrics.worldX = this.physics.state.position.x;
     this.publicMetrics.worldY = this.physics.state.position.y;
     globalThis.__POWDERLINE_METRICS__ = this.publicMetrics;
-  }
-
-  private pauseForLifecycle(reason: LifecyclePauseReason): void {
-    this.publicMetrics.pauseReason = reason;
-    this.setPaused(true, true);
   }
 
   private triggerLabCrash(settings: {
@@ -423,7 +415,7 @@ export class Game {
     document.body.classList.add('ready');
     this.loop.start();
     new LifecycleManager({
-      pause: (reason) => this.pauseForLifecycle(reason),
+      clearInput: () => this.input.resetTransientState(),
       suspend: () => this.loop.stop(),
       resume: () => {
         this.loop.resetClock();

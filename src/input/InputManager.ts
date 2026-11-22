@@ -240,14 +240,9 @@ export class InputManager {
     this.gamepadSteer = 0;
     this.gamepadBrake = false;
     this.gamepadTuck = false;
-    this.previousGamepad = {
-      steer: 0,
-      brake: false,
-      tuck: false,
-      confirm: false,
-      pause: false,
-      restart: false,
-    };
+    this.pauseRequested = false;
+    this.confirmRequested = false;
+    this.restartRequested = false;
     this.updateState();
   }
 

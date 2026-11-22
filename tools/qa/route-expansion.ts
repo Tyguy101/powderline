@@ -253,7 +253,7 @@ async function dangerous(): Promise<void> {
   const crashed = await ride((m) => m.crashed === 'true');
   assert.equal(crashed.hazardImpact, 'boulder');
   await page.keyboard.up('KeyS');
-  await page.getByRole('button', { name: /Retry Section/ }).waitFor();
+  await page.getByRole('button', { name: 'Recovery options' }).click();
   await capture('hazards-straight-tuck-caught', await metrics());
 
   await load('hazards');
@@ -262,7 +262,7 @@ async function dangerous(): Promise<void> {
   await page.mouse.up();
   assert.equal(combinedCrash.hazardImpact, 'ice');
   assert.equal(combinedCrash.boulderActive, 'true');
-  await page.getByRole('button', { name: /Retry Section/ }).waitFor();
+  await page.getByRole('button', { name: 'Recovery options' }).click();
   await capture('hazards-combined-crash', await metrics());
   await page.getByRole('button', { name: /Retry Section/ }).click();
   await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.crashed === 'false');
@@ -282,6 +282,7 @@ async function dangerous(): Promise<void> {
     [Number(m.sectionCenter) + (m.iceActive === 'true' && Number(m.iceTime) < 0.12 ? 12 : 0), 'tuck']);
   assert.equal(tooLate.hazardImpact, 'ice');
   await page.mouse.up();
+  await page.getByRole('button', { name: 'Recovery options' }).click();
   await capture('hazards-late-ice-hit', tooLate);
   await page.getByRole('button', { name: 'Restart at the Top' }).click();
   await page.waitForFunction((original) => {

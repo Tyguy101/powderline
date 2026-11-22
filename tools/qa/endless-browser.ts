@@ -298,7 +298,7 @@ async function chaseEncounters() {
   const fixedSide = Number(result.worldX);
   await follow((m) => m.avalanche === 'caught', () => [fixedSide, 'coast'], 28_000);
   await page.mouse.up();
-  await page.getByRole('button', { name: /Retry Section/ }).waitFor();
+  await page.getByRole('button', { name: 'Recovery options' }).click();
   await capture('avalanche-missed-shift', await state());
   await page.getByRole('button', { name: /Retry Section/ }).click();
   result = await waitForMetrics((m) => m.avalanche === 'quiet' && m.crashed === 'false');
@@ -311,6 +311,7 @@ async function chaseEncounters() {
   result = await waitForMetrics((m) => m.avalanche === 'caught', 30_000);
   await page.keyboard.up('KeyS');
   assert.equal(result.wavesCleared, 0);
+  await page.getByRole('button', { name: 'Recovery options' }).click();
   await capture('avalanche-straight-tuck', result);
   await page.getByRole('button', { name: 'Restart at the Top' }).click();
   result = await waitForMetrics((m) => m.section === 'pine' && m.seed !== seed && m.crashed === 'false');

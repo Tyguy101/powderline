@@ -192,21 +192,28 @@ async function verifyTouchFoundation(page: Page): Promise<void> {
     Object.defineProperty(document, 'hidden', { configurable: true, value: true });
     document.dispatchEvent(new Event('visibilitychange'));
   });
-  assert(await page.locator('.pause-overlay').evaluate((node) => node.classList.contains('visible')),
-    'Backgrounding did not show an explicit resume prompt.');
-  assert(!(await page.locator('.pause-controls').isVisible()), 'Backgrounding opened the controls reference.');
+  assert(!(await page.locator('.pause-overlay').isVisible()), 'Backgrounding opened Pause.');
   const hiddenY = (await readSnapshot(page)).worldY;
   await page.waitForTimeout(350);
+  assert((await readSnapshot(page)).worldY === hiddenY, 'The hidden interval advanced simulation.');
   await page.evaluate(() => {
     Object.defineProperty(document, 'hidden', { configurable: true, value: false });
     document.dispatchEvent(new Event('visibilitychange'));
   });
   await page.waitForTimeout(250);
   const restored = await readSnapshot(page);
-  assert(restored.paused, 'Returning from the background resumed gameplay automatically.');
-  assert(Math.abs(restored.worldY - hiddenY) < 0.001, 'Background interval advanced simulation.');
-  await page.locator('[data-resume]').click();
-  await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.paused === 'false');
+  assert(!restored.paused && restored.worldY > hiddenY, 'Returning to the foreground did not continue the run.');
+  assert(restored.worldY - hiddenY < 8, 'Returning to the foreground caused a simulation jump.');
+  assert(!(await page.locator('.pause-overlay').isVisible()), 'Returning to the foreground opened Pause.');
+  await pause.click();
+  await page.waitForFunction(() => Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.paused === 'true');
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new Event('pageshow'));
+  });
+  await page.waitForTimeout(150);
+  assert((await readSnapshot(page)).paused && await resume.isVisible(), 'Lifecycle changed a manual pause.');
+  await resume.click();
 
   assert(brakeBox && tuckBox, 'Touch action bounds are unavailable.');
   const canvasBox = await page.locator('#game-canvas').boundingBox();

@@ -119,9 +119,10 @@ async function phone() {
   assert.equal((await metrics(page)).worldY, paused.worldY, 'Resize advanced paused run');
   await pause.getByRole('button', { name: 'Resume' }).tap();
   await page.evaluate(() => window.dispatchEvent(new Event('blur')));
-  await pause.getByRole('button', { name: 'Resume' }).waitFor();
-  assert.equal(await page.locator('.pause-controls:visible').count(), 0, 'Focus loss opened the controls reference.');
-  await pause.getByRole('button', { name: 'Resume' }).tap();
+  const beforeBlur = Number((await metrics(page)).worldY);
+  await page.waitForFunction((y) => Number(Reflect.get(globalThis, '__POWDERLINE_METRICS__')?.worldY) > y + 2, beforeBlur);
+  assert.equal((await metrics(page)).paused, 'false');
+  assert.equal(await page.getByRole('dialog').count(), 0, 'Focus loss opened a dialog.');
   await go(page);
   await verifyQuietStart(page);
   results.push({ name: 'mobile-first-repeat-and-pause', build: paused.build, brake, tuck,
@@ -161,8 +162,11 @@ async function phone() {
   assert.equal(await page.locator('.run-cue:visible').count(), 1);
   await screenshot(page, 'phone-warning-potato');
   const crash = page.getByRole('dialog', { name: /Caught by a rolling boulder/ });
-  await crash.waitFor();
+  const recovery = page.getByRole('button', { name: 'Recovery options' });
+  await recovery.waitFor();
   await emit('touchEnd', []);
+  assert.equal(await page.getByRole('dialog').count(), 0, 'Wipeout opened a dialog automatically.');
+  await recovery.tap();
   await cue.waitFor({ state: 'hidden' });
   await screenshot(page, 'phone-crash-potato');
   await crash.getByRole('button', { name: 'Copy replay link' }).tap();
@@ -177,8 +181,9 @@ async function phone() {
   });
   await cue.waitFor({ state: 'hidden' });
   await emit('touchStart', [await point('.touch-action--tuck', 4)]);
-  await crash.waitFor();
+  await recovery.waitFor();
   await emit('touchEnd', []);
+  await recovery.tap();
   await crash.getByRole('button', { name: 'Restart at the Top' }).tap();
   await page.waitForFunction((original) => {
     const m = Reflect.get(globalThis, '__POWDERLINE_METRICS__');
@@ -226,7 +231,25 @@ async function desktop() {
   await page.keyboard.press('F3');
   await page.getByText('FRAME METRICS', { exact: true }).waitFor();
   assert.equal(await page.locator('#debug').getAttribute('data-build'), String((await metrics(page)).build));
-  results.push({ name: 'desktop-repeat-pause-and-debug', build: (await metrics(page)).build });
+  await page.evaluate(`(() => {
+    let menuHeld = false;
+    Object.defineProperty(navigator, 'getGamepads', { value: () => [{
+      connected: true, index: 0, mapping: 'standard', axes: [0, 0],
+      buttons: Array.from({ length: 17 }, (_, index) => ({ pressed: index === 9 && menuHeld })),
+    }] });
+    window.addEventListener('qa-menu-down', () => { menuHeld = true; });
+    window.addEventListener('qa-menu-up', () => { menuHeld = false; });
+    window.dispatchEvent(new Event('qa-menu-down'));
+  })()`);
+  await modal.waitFor();
+  await page.waitForTimeout(500);
+  assert.equal((await metrics(page)).paused, 'true', 'Holding the controller Menu button toggled pause twice.');
+  await page.evaluate(() => window.dispatchEvent(new Event('qa-menu-up')));
+  await page.waitForTimeout(100);
+  await page.evaluate(() => window.dispatchEvent(new Event('qa-menu-down')));
+  await modal.waitFor({ state: 'hidden' });
+  await page.evaluate(() => window.dispatchEvent(new Event('qa-menu-up')));
+  results.push({ name: 'desktop-repeat-pause-and-debug', build: (await metrics(page)).build, controllerMenuHold: true });
   if (!quick) await sight(page, false);
   await context.close();
 }
